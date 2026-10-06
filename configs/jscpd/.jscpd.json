@@ -1,0 +1,36 @@
+{
+  "threshold": 3,
+  "reporters": ["json", "console"],
+  "output": "reports/raw/jscpd",
+  "mode": "mild",
+  "minLines": 5,
+  "minTokens": 50,
+  "ignore": [
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/reports/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/test_samples/**",
+    "**/vendor/**",
+    "**/*.min.js",
+    "**/*.d.ts",
+    "**/package-lock.json",
+    "**/pnpm-lock.yaml"
+  ],
+  "format": [
+    "javascript",
+    "typescript",
+    "jsx",
+    "tsx",
+    "go",
+    "python",
+    "php",
+    "css",
+    "scss",
+    "html",
+    "json",
+    "yaml"
+  ]
+}

@@ -1,0 +1,8 @@
+ignored:
+  - DL3008 # Pin versions in apt-get (handled by lockfiles and verified images)
+  - DL3018 # Pin versions in apk add (handled by alpine CDN retry policy)
+  - DL3016 # Pin versions in npm (global container CLI tools)
+  - DL3013 # Pin versions in pip (global container CLI tools)
+  - DL3062 # Pin versions in go (latest tools)
+strict-labels: false
+failure-threshold: error

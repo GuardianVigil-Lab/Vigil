@@ -1,0 +1,89 @@
+name: 'Vigil Security & Quality Action'
+description: 'All-in-one Deep VAPT, Code Quality, Automated PR Review & Anti-Fabrication Security Engine'
+author: 'GuardianVigil Engineering'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  battery:
+    description: 'Audit battery mode: fast, quality, security, vapt, test, e2e, review'
+    required: false
+    default: 'review'
+  target_url:
+    description: 'Target URL for active dynamic VAPT and Playwright E2E probes'
+    required: false
+    default: 'http://127.0.0.1:3000'
+  github_token:
+    description: 'GitHub token for Reviewdog inline PR diff annotations'
+    required: false
+    default: ${{ github.token }}
+  sarif_upload:
+    description: 'Automatically upload generated SARIF report to GitHub Advanced Security Code Scanning'
+    required: false
+    default: 'true'
+  image:
+    description: 'Vigil Docker image to run'
+    required: false
+    default: 'ghcr.io/guardianvigil-lab/vigil:latest'
+
+outputs:
+  sarif_path:
+    description: 'Absolute path to the synthesized SARIF 2.1.0 report'
+    value: ${{ steps.run-vigil.outputs.sarif_path }}
+  markdown_path:
+    description: 'Absolute path to the synthesized Markdown report'
+    value: ${{ steps.run-vigil.outputs.markdown_path }}
+  verdict:
+    description: 'Overall audit verdict: PASSED or FAILED'
+    value: ${{ steps.run-vigil.outputs.verdict }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Ensure reports directory
+      shell: bash
+      env:
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+      run: mkdir -p "${GITHUB_WORKSPACE}/reports"
+
+    - name: Run Vigil Container
+      id: run-vigil
+      shell: bash
+      env:
+        VIGIL_IMAGE: ${{ inputs.image }}
+        TARGET_URL: ${{ inputs.target_url }}
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
+        VIGIL_BATTERY: ${{ inputs.battery }}
+      run: |
+        set +e
+        docker run --rm \
+          --network host \
+          --shm-size=2gb \
+          -e VIGIL_UID="$(id -u)" \
+          -e VIGIL_GID="$(id -g)" \
+          -e VIGIL_HOST_WORKSPACE="${GITHUB_WORKSPACE}" \
+          -e TARGET_URL="${TARGET_URL}" \
+          -e GITHUB_TOKEN="${GITHUB_TOKEN}" \
+          -e CI="true" \
+          -v /var/run/docker.sock:/var/run/docker.sock \
+          -v "${GITHUB_WORKSPACE}:/workspace" \
+          "${VIGIL_IMAGE}" "${VIGIL_BATTERY}"
+        
+        EXIT_CODE=$?
+        echo "sarif_path=${GITHUB_WORKSPACE}/reports/vigil.sarif" >> "${GITHUB_OUTPUT}"
+        echo "markdown_path=${GITHUB_WORKSPACE}/reports/vigil-review.md" >> "${GITHUB_OUTPUT}"
+        if [ $EXIT_CODE -eq 0 ]; then
+          echo "verdict=PASSED" >> "${GITHUB_OUTPUT}"
+        else
+          echo "verdict=FAILED" >> "${GITHUB_OUTPUT}"
+          exit $EXIT_CODE
+        fi
+
+    - name: Upload SARIF to GitHub Code Scanning
+      if: always() && inputs.sarif_upload == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ github.workspace }}/reports/vigil.sarif
+        category: 'vigil'

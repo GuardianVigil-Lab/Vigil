@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Sentinel: Compatibility wrapper forwarding to Vigil CLI
+# Note: 'sentinel' is now rebranded to 'vigil'. Use 'vigil' for all future workflows.
+#
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -x "${SCRIPT_DIR}/vigil" ]; then
+  exec "${SCRIPT_DIR}/vigil" "$@"
+elif command -v vigil >/dev/null 2>&1; then
+  exec vigil "$@"
+else
+  echo "[ERROR] Cannot find vigil executable" >&2
+  exit 1
+fi

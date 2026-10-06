@@ -1,0 +1,6 @@
+[rules]
+require-concurrent-index-creation = "error"
+ban-drop-column = "warning"
+ban-drop-table = "warning"
+prefer-text-field = "warning"
+lock-timeout = "error"

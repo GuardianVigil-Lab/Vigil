@@ -1,0 +1,9 @@
+parameters:
+  level: 8
+  paths:
+    - scripts
+    - src
+    - public
+  excludePaths:
+    - vendor/*
+    - node_modules/*

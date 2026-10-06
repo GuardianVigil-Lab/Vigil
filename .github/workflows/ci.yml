@@ -1,0 +1,60 @@
+name: Vigil Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  self-test:
+    name: Self-Checks & Engine Verifications
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify Anti-Fabrication Engine Self-Check (50 Fixtures)
+        run: |
+          python3 engine/anti_fabrication/detector.py --self-check
+
+      - name: Validate Python Syntax across Engines, MCP & API
+        run: |
+          python3 -m py_compile engine/anti_fabrication/*.py
+          python3 -m py_compile engine/vapt/*.py
+          python3 -m py_compile engine/code_review/*.py
+          python3 -m py_compile engine/synthesizer/*.py
+          python3 -m py_compile engine/mcp/*.py
+          python3 -m py_compile engine/api/*.py
+
+      - name: Validate Shell Script Execution Bits & Syntax
+        run: |
+          chmod +x bin/vigil bin/sentinel vigil.sh sentinel.sh entrypoint.sh runners/*.sh engine/vapt/*.sh engine/code_review/*.sh
+          bash -n bin/vigil
+          bash -n bin/sentinel
+          bash -n vigil.sh
+          bash -n sentinel.sh
+          bash -n entrypoint.sh
+          for script in runners/*.sh engine/vapt/*.sh engine/code_review/*.sh; do
+            bash -n "$script"
+          done
+
+      - name: Validate Configuration Schemas
+        run: |
+          python3 -c "import json; [json.loads(open(p).read()) for p in ['configs/jscpd/.jscpd.json']]"
+
+      - name: Test Dockerfile Linting
+        run: |
+          docker run --rm -i hadolint/hadolint < Dockerfile || true

@@ -1,0 +1,43 @@
+id: action-authorization-guard
+message: "Server action must invoke an authorization guard (e.g., auth(), getSession(), verifySession(), requireAuth(), or assertSession())."
+severity: error
+language: TypeScript
+files:
+  - "**/actions/**"
+  - "**/src/app/actions/**"
+  - "**/src/actions/**"
+ignores:
+  - "**/node_modules/**"
+  - "**/*.test.*"
+  - "**/__tests__/**"
+rule:
+  any:
+    - all:
+        - kind: export_statement
+        - has:
+            field: declaration
+            kind: function_declaration
+        - not:
+            has:
+              stopBy: end
+              kind: call_expression
+              has:
+                field: function
+                regex: "^(assert[A-Z]|getSession|getAuthSession|require[A-Z]|verify[A-Z]|protect[A-Z]|enforce[A-Z]|auth$|checkAuth|validateSession)"
+    - all:
+        - kind: export_statement
+        - has:
+            field: declaration
+            kind: lexical_declaration
+            has:
+              kind: variable_declarator
+              has:
+                field: value
+                kind: arrow_function
+        - not:
+            has:
+              stopBy: end
+              kind: call_expression
+              has:
+                field: function
+                regex: "^(assert[A-Z]|getSession|getAuthSession|require[A-Z]|verify[A-Z]|protect[A-Z]|enforce[A-Z]|auth$|checkAuth|validateSession)"

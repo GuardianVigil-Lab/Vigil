@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+#
+# Vigil: Portable POSIX Host Runner & Security CLI
+# Consumes ghcr.io/guardianvigil-lab/vigil:latest (or local fallback guardianvigil-vigil:local)
+#
+# Usage:
+#   vigil [fast | quality | security | vapt | test | e2e | review]
+#   vigil --build    # Rebuild Vigil image locally
+#   vigil --shell    # Drop into debug shell inside container
+#
+
+set -euo pipefail
+
+IMAGE_NAME="${VIGIL_IMAGE:-${SENTINEL_IMAGE:-ghcr.io/guardianvigil-lab/vigil:latest}}"
+LOCAL_IMAGE="guardianvigil-vigil:local"
+VIGIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET_WORKSPACE="$(pwd)"
+
+# Ensure cache and reports directory exist on host
+CACHE_DIR="${HOME}/.cache/vigil"
+mkdir -p "${CACHE_DIR}" "${TARGET_WORKSPACE}/reports"
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "help" ]; then
+  cat <<'HELP_EOF'
+Vigil — Enterprise Security, VAPT & Code Review CLI
+
+Usage:
+  vigil [fast | quality | security | vapt | test | e2e | review]
+  vigil --build    # Rebuild Vigil container image locally
+  vigil --shell    # Drop into interactive debug shell inside container
+  vigil --help     # Show this help message
+
+Batteries:
+  fast      Fast developer iteration (< 15s): AST linting, action guards, secrets, workflow security
+  quality   Code quality & dead code: golangci-lint, ruff, knip, squawk, jscpd duplication, PR review
+  security  Deep security: anti-fabrication (18 rules), gitleaks, trufflehog, trivy, grype, IaC
+  vapt      Dynamic VAPT: Strix autonomous AI red team, cross-tenant BOLA matrix, nmap, testssl, nikto
+  test      QA tests: Go module tests with -race, Vitest, Stryker & go-mutesting mutation testing
+  e2e       Containerized Playwright headless Chromium user personas (auth, DOM sweep, form fuzzing)
+  review    Full audit battery (runs all above and synthesizes Markdown + SARIF 2.1.0 reports)
+HELP_EOF
+  exit 0
+fi
+
+# Build local image if requested
+if [ "${1:-}" = "--build" ]; then
+  echo "Building Vigil container image (${LOCAL_IMAGE})..."
+  docker build -t "${LOCAL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+  exit 0
+fi
+
+# Check image availability
+SELECTED_IMAGE="${IMAGE_NAME}"
+if ! docker image inspect "${SELECTED_IMAGE}" >/dev/null 2>&1; then
+  if docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1; then
+    SELECTED_IMAGE="${LOCAL_IMAGE}"
+  elif docker image inspect "guardianvigil-sentinel:local" >/dev/null 2>&1; then
+    SELECTED_IMAGE="guardianvigil-sentinel:local"
+  elif [ -f "${VIGIL_DIR}/Dockerfile" ]; then
+    echo "Image '${SELECTED_IMAGE}' not found locally. Building from ${VIGIL_DIR}/Dockerfile..."
+    docker build -t "${LOCAL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+    SELECTED_IMAGE="${LOCAL_IMAGE}"
+  else
+    echo "Pulling '${SELECTED_IMAGE}'..."
+    docker pull "${SELECTED_IMAGE}" || {
+      echo "Failed to pull ${SELECTED_IMAGE}. Ensure you are authenticated or build locally with 'vigil --build'."
+      exit 1
+    }
+  fi
+fi
+
+# Docker socket passthrough for DooD and DooD host workspace translation
+DOCKER_SOCK_ARGS=()
+if [ -S /var/run/docker.sock ]; then
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    DOCKER_GID=$(stat -f '%g' /var/run/docker.sock 2>/dev/null || echo 0)
+  else
+    DOCKER_GID=$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 0)
+  fi
+  DOCKER_SOCK_ARGS=("-v" "/var/run/docker.sock:/var/run/docker.sock" "--group-add" "${DOCKER_GID}")
+fi
+
+# Interactive terminal flag
+DOCKER_FLAGS="-i"
+if [ -t 0 ] && [ -t 1 ]; then
+  DOCKER_FLAGS="-it"
+fi
+
+# Debug shell
+if [ "${1:-}" = "--shell" ]; then
+  shift
+  SHELL_ARGS=()
+  if [ "$#" -gt 0 ]; then
+    SHELL_ARGS=("-c" "$*")
+  fi
+  exec docker run --rm ${DOCKER_FLAGS} \
+    --network host \
+    --shm-size=2gb \
+    -u "$(id -u):$(id -g)" \
+    -e VIGIL_UID="$(id -u)" \
+    -e VIGIL_GID="$(id -g)" \
+    -e VIGIL_HOST_WORKSPACE="${TARGET_WORKSPACE}" \
+    -v "${TARGET_WORKSPACE}:/workspace" \
+    "${DOCKER_SOCK_ARGS[@]}" \
+    -v "${CACHE_DIR}:/home/vigil/.cache" \
+    --entrypoint /bin/bash \
+    "${SELECTED_IMAGE}" "${SHELL_ARGS[@]}"
+fi
+
+# Run Vigil
+exec docker run --rm ${DOCKER_FLAGS} \
+  --network host \
+  --shm-size=2gb \
+  -u "$(id -u):$(id -g)" \
+  -e VIGIL_UID="$(id -u)" \
+  -e VIGIL_GID="$(id -g)" \
+  -e VIGIL_HOST_WORKSPACE="${TARGET_WORKSPACE}" \
+  -v "${TARGET_WORKSPACE}:/workspace" \
+  "${DOCKER_SOCK_ARGS[@]}" \
+  -v "${CACHE_DIR}:/home/vigil/.cache" \
+  "${SELECTED_IMAGE}" "$@"

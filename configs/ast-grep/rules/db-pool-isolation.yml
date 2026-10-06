@@ -1,0 +1,22 @@
+id: db-pool-isolation
+message: "Direct database Pool instantiation is forbidden outside dedicated database abstraction modules (e.g., lib/db.ts, lib/storage/db.ts, or db/pool.ts). Use central pool accessors."
+severity: error
+language: TypeScript
+files:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+ignores:
+  - "**/lib/**/db*"
+  - "**/lib/db*"
+  - "**/src/lib/db*"
+  - "**/db/**"
+  - "**/database/**"
+  - "**/node_modules/**"
+  - "**/*.test.*"
+  - "**/__tests__/**"
+rule:
+  kind: new_expression
+  has:
+    field: constructor
+    regex: "^Pool$"
