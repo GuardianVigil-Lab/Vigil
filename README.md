@@ -1,9 +1,15 @@
-# Vigil (`GuardianVigil-Lab/vigil`)
+<div align="center">
+  <img src="assets/logo.png" alt="Vigil Logo" width="180" />
+  <h1>Vigil</h1>
+  <p><strong>All-in-One Autonomous VAPT, Anti-Fabrication Code Review, and Zero-Host Security Engine</strong></p>
 
-[![CI](https://github.com/GuardianVigil-Lab/vigil/actions/workflows/ci.yml/badge.svg)](https://github.com/GuardianVigil-Lab/vigil/actions/workflows/ci.yml)
-[![Docker Image](https://img.shields.io/badge/ghcr.io-guardianvigil--lab%2Fvigil-blue?logo=docker)](https://github.com/GuardianVigil-Lab/vigil/pkgs/container/vigil)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Platforms: Linux | macOS | Windows](https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-blueviolet)](docs/CROSS_PLATFORM.md)
+  <p>
+    <a href="https://github.com/GuardianVigil-Lab/vigil/actions/workflows/ci.yml"><img src="https://github.com/GuardianVigil-Lab/vigil/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/GuardianVigil-Lab/vigil/pkgs/container/vigil"><img src="https://img.shields.io/badge/ghcr.io-guardianvigil--lab%2Fvigil-blue?logo=docker" alt="Docker Image" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-green.svg" alt="License: Apache 2.0" /></a>
+    <a href="docs/CROSS_PLATFORM.md"><img src="https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-blueviolet" alt="Platforms" /></a>
+  </p>
+</div>
 
 **Vigil** is a unified, local-first enterprise security, VAPT, code quality, and PR review engine (`ghcr.io/guardianvigil-lab/vigil:latest`).
 
