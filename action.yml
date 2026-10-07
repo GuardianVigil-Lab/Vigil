@@ -58,6 +58,18 @@ runs:
         VIGIL_BATTERY: ${{ inputs.battery }}
       run: |
         set +e
+        IMAGE_TO_RUN="${VIGIL_IMAGE}"
+        if [ -z "${IMAGE_TO_RUN}" ] || [ "${IMAGE_TO_RUN}" = "ghcr.io/guardianvigil-lab/vigil:latest" ]; then
+          case "${VIGIL_BATTERY}" in
+            fast|quality|security)
+              IMAGE_TO_RUN="ghcr.io/guardianvigil-lab/vigil:core"
+              ;;
+            *)
+              IMAGE_TO_RUN="ghcr.io/guardianvigil-lab/vigil:latest"
+              ;;
+          esac
+        fi
+        echo "Using Vigil container image: ${IMAGE_TO_RUN} (battery: ${VIGIL_BATTERY})"
         docker run --rm \
           --network host \
           --shm-size=2gb \
@@ -69,7 +81,7 @@ runs:
           -e CI="true" \
           -v /var/run/docker.sock:/var/run/docker.sock \
           -v "${GITHUB_WORKSPACE}:/workspace" \
-          "${VIGIL_IMAGE}" "${VIGIL_BATTERY}"
+          "${IMAGE_TO_RUN}" "${VIGIL_BATTERY}"
         
         EXIT_CODE=$?
         echo "sarif_path=${GITHUB_WORKSPACE}/reports/vigil.sarif" >> "${GITHUB_OUTPUT}"

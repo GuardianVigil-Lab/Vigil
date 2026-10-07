@@ -48,15 +48,15 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
         SG_ARCH="x86_64-unknown-linux-gnu"; \
         SQUAWK_ARCH="linux-x64" ;; \
     esac && \
-    curl -fsSL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-${HADOLINT_ARCH} -o hadolint && chmod +x hadolint && \
-    curl -fsSL https://github.com/woodruffw/zizmor/releases/download/v1.30.1/zizmor-${ZIZMOR_ARCH}.tar.gz | tar -xz -C /out/bin zizmor && chmod +x zizmor && \
-    curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.0/gitleaks_8.24.0_${GITLEAKS_ARCH}.tar.gz | tar -xz -C /out/bin gitleaks && chmod +x gitleaks && \
-    curl -fsSL https://github.com/trufflesecurity/trufflehog/releases/download/v3.98.1/trufflehog_3.98.1_${TRUFFLEHOG_ARCH}.tar.gz | tar -xz -C /out/bin trufflehog && chmod +x trufflehog && \
-    curl -fsSL https://github.com/anchore/syft/releases/download/v1.20.0/syft_1.20.0_${SYFT_ARCH}.tar.gz | tar -xz -C /out/bin syft && chmod +x syft && \
-    curl -fsSL https://github.com/anchore/grype/releases/download/v0.88.0/grype_0.88.0_${GRYPE_ARCH}.tar.gz | tar -xz -C /out/bin grype && chmod +x grype && \
-    curl -fsSL https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_${TRIVY_ARCH}.tar.gz | tar -xz -C /out/bin trivy && chmod +x trivy && \
-    curl -fsSL https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-${SG_ARCH}.zip -o /tmp/sg.zip && unzip -q -o /tmp/sg.zip -d /out/bin && chmod +x /out/bin/ast-grep /out/bin/sg && rm -f /tmp/sg.zip && \
-    curl -fsSL https://github.com/sbdchd/squawk/releases/download/v2.67.0/squawk-${SQUAWK_ARCH} -o squawk && chmod +x squawk
+    curl -fsSL "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-${HADOLINT_ARCH}" -o hadolint && chmod +x hadolint && \
+    curl -fsSL "https://github.com/woodruffw/zizmor/releases/download/v1.30.1/zizmor-${ZIZMOR_ARCH}.tar.gz" | tar -xz -C /out/bin zizmor && chmod +x zizmor && \
+    curl -fsSL "https://github.com/gitleaks/gitleaks/releases/download/v8.24.0/gitleaks_8.24.0_${GITLEAKS_ARCH}.tar.gz" | tar -xz -C /out/bin gitleaks && chmod +x gitleaks && \
+    curl -fsSL "https://github.com/trufflesecurity/trufflehog/releases/download/v3.98.1/trufflehog_3.98.1_${TRUFFLEHOG_ARCH}.tar.gz" | tar -xz -C /out/bin trufflehog && chmod +x trufflehog && \
+    curl -fsSL "https://github.com/anchore/syft/releases/download/v1.20.0/syft_1.20.0_${SYFT_ARCH}.tar.gz" | tar -xz -C /out/bin syft && chmod +x syft && \
+    curl -fsSL "https://github.com/anchore/grype/releases/download/v0.88.0/grype_0.88.0_${GRYPE_ARCH}.tar.gz" | tar -xz -C /out/bin grype && chmod +x grype && \
+    curl -fsSL "https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_${TRIVY_ARCH}.tar.gz" | tar -xz -C /out/bin trivy && chmod +x trivy && \
+    curl -fsSL "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-${SG_ARCH}.zip" -o /tmp/sg.zip && unzip -q -o /tmp/sg.zip -d /out/bin && chmod +x /out/bin/ast-grep /out/bin/sg && rm -f /tmp/sg.zip && \
+    curl -fsSL "https://github.com/sbdchd/squawk/releases/download/v2.67.0/squawk-${SQUAWK_ARCH}" -o squawk && chmod +x squawk
 
 
 # ==============================================================================
@@ -98,14 +98,14 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
         STRIX_ARCH="x86_64"; \
         REVIEWDOG_ARCH="Linux_x86_64" ;; \
     esac && \
-    curl -fsSL https://github.com/projectdiscovery/nuclei/releases/download/v3.3.8/nuclei_3.3.8_${NUCLEI_ARCH}.zip -o /tmp/nuclei.zip && unzip -q -o /tmp/nuclei.zip nuclei -d /out/bin && chmod +x nuclei && rm -f /tmp/nuclei.zip && \
-    curl -fsSL https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_${FFUF_ARCH}.tar.gz | tar -xz -C /out/bin ffuf && chmod +x ffuf && \
-    curl -fsSL https://github.com/oasdiff/oasdiff/releases/download/v1.33.0/oasdiff_1.33.0_${OASDIFF_ARCH}.tar.gz | tar -xz -C /out/bin oasdiff && chmod +x oasdiff && \
-    curl -fsSL https://github.com/goodwithtech/dockle/releases/download/v0.4.14/dockle_0.4.14_${DOCKLE_ARCH}.tar.gz | tar -xz -C /out/bin dockle && chmod +x dockle && \
-    curl -fsSL https://github.com/Shopify/toxiproxy/releases/download/v2.12.0/toxiproxy-cli-${TOXIPROXY_ARCH} -o toxiproxy-cli && chmod +x toxiproxy-cli && \
-    curl -fsSL https://github.com/Shopify/toxiproxy/releases/download/v2.12.0/toxiproxy-server-${TOXIPROXY_ARCH} -o toxiproxy-server && chmod +x toxiproxy-server && \
-    curl -fsSL https://github.com/usestrix/strix/releases/download/v1.7.0/strix-1.7.0-linux-${STRIX_ARCH}.tar.gz | tar -xz -C /tmp && mv /tmp/strix-1.7.0-linux-${STRIX_ARCH} /out/bin/strix && chmod +x /out/bin/strix && \
-    curl -fsSL https://github.com/reviewdog/reviewdog/releases/download/v0.20.3/reviewdog_0.20.3_${REVIEWDOG_ARCH}.tar.gz | tar -xz -C /out/bin reviewdog && chmod +x /out/bin/reviewdog
+    curl -fsSL "https://github.com/projectdiscovery/nuclei/releases/download/v3.3.8/nuclei_3.3.8_${NUCLEI_ARCH}.zip" -o /tmp/nuclei.zip && unzip -q -o /tmp/nuclei.zip nuclei -d /out/bin && chmod +x nuclei && rm -f /tmp/nuclei.zip && \
+    curl -fsSL "https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_${FFUF_ARCH}.tar.gz" | tar -xz -C /out/bin ffuf && chmod +x ffuf && \
+    curl -fsSL "https://github.com/oasdiff/oasdiff/releases/download/v1.33.0/oasdiff_1.33.0_${OASDIFF_ARCH}.tar.gz" | tar -xz -C /out/bin oasdiff && chmod +x oasdiff && \
+    curl -fsSL "https://github.com/goodwithtech/dockle/releases/download/v0.4.14/dockle_0.4.14_${DOCKLE_ARCH}.tar.gz" | tar -xz -C /out/bin dockle && chmod +x dockle && \
+    curl -fsSL "https://github.com/Shopify/toxiproxy/releases/download/v2.12.0/toxiproxy-cli-${TOXIPROXY_ARCH}" -o toxiproxy-cli && chmod +x toxiproxy-cli && \
+    curl -fsSL "https://github.com/Shopify/toxiproxy/releases/download/v2.12.0/toxiproxy-server-${TOXIPROXY_ARCH}" -o toxiproxy-server && chmod +x toxiproxy-server && \
+    curl -fsSL "https://github.com/usestrix/strix/releases/download/v1.7.0/strix-1.7.0-linux-${STRIX_ARCH}.tar.gz" | tar -xz -C /tmp && mv "/tmp/strix-1.7.0-linux-${STRIX_ARCH}" /out/bin/strix && chmod +x /out/bin/strix && \
+    curl -fsSL "https://github.com/reviewdog/reviewdog/releases/download/v0.20.3/reviewdog_0.20.3_${REVIEWDOG_ARCH}.tar.gz" | tar -xz -C /out/bin reviewdog && chmod +x /out/bin/reviewdog
 
 # testssl.sh (v3.0.8)
 RUN mkdir -p /out/testssl && \
@@ -217,7 +217,9 @@ WORKDIR /workspace
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD ["/tools/vigil/bin/vigil", "--help"]
 
-USER 1000:1000
+# Entrypoint drops privileges dynamically to host workspace UID/GID via gosu
+# hadolint ignore=DL3002
+USER 0:0
 
 ENTRYPOINT ["/tools/vigil/entrypoint.sh"]
 CMD ["fast"]
@@ -259,8 +261,8 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
       arm64|aarch64) NODE_ARCH="arm64"; GO_ARCH="arm64" ;; \
       *)             NODE_ARCH="x64";   GO_ARCH="amd64" ;; \
     esac && \
-    curl -fsSL https://nodejs.org/dist/v26.10.0/node-v26.10.0-linux-${NODE_ARCH}.tar.gz | tar -xz --strip-components=1 -C /usr/local && \
-    curl -fsSL https://go.dev/dl/go1.27.1.linux-${GO_ARCH}.tar.gz | tar -xz -C /usr/local
+    curl -fsSL "https://nodejs.org/dist/v26.10.0/node-v26.10.0-linux-${NODE_ARCH}.tar.gz" | tar -xz --strip-components=1 -C /usr/local && \
+    curl -fsSL "https://go.dev/dl/go1.27.1.linux-${GO_ARCH}.tar.gz" | tar -xz -C /usr/local
 
 ENV PATH="/usr/local/go/bin:/go/bin:/usr/local/bin:$PATH"
 ENV GOPATH="/go"
@@ -323,7 +325,9 @@ RUN mkdir -p /home/vigil/.cache/go-build /home/vigil/go /go && \
 
 WORKDIR /workspace
 
-USER 1000:1000
+# Entrypoint drops privileges dynamically to host workspace UID/GID via gosu
+# hadolint ignore=DL3002
+USER 0:0
 
 ENTRYPOINT ["/tools/vigil/entrypoint.sh"]
 CMD ["review"]

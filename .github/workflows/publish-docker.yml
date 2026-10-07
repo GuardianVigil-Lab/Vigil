@@ -10,15 +10,19 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build-amd64:
     name: Build Native AMD64 Images (Core & Full)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Free runner disk space
         run: |
@@ -69,9 +73,14 @@ jobs:
   build-arm64:
     name: Build Native ARM64 Images (Core & Full)
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Free runner disk space
         run: |
@@ -123,9 +132,14 @@ jobs:
     name: Create & Publish Multi-Arch Manifests
     runs-on: ubuntu-latest
     needs: [build-amd64, build-arm64]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -139,13 +153,16 @@ jobs:
 
       - name: Extract metadata
         id: meta
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
           echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           
           IS_TAG="false"
           TAG_NAME=""
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             IS_TAG="true"
             TAG_NAME="${GITHUB_REF#refs/tags/}"
           fi
@@ -153,20 +170,28 @@ jobs:
           echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Merge & Publish Multi-Arch Core Manifest
+        env:
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+          IS_TAG: ${{ steps.meta.outputs.is_tag }}
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
         run: |
-          CORE_TAGS=("-t" "ghcr.io/guardianvigil-lab/vigil:core" "-t" "ghcr.io/guardianvigil-lab/vigil:core-${{ steps.meta.outputs.short_sha }}")
-          if [ "${{ steps.meta.outputs.is_tag }}" = "true" ]; then
-            CORE_TAGS+=("-t" "ghcr.io/guardianvigil-lab/vigil:core-${{ steps.meta.outputs.tag_name }}")
+          CORE_TAGS=("-t" "ghcr.io/guardianvigil-lab/vigil:core" "-t" "ghcr.io/guardianvigil-lab/vigil:core-${SHORT_SHA}")
+          if [ "${IS_TAG}" = "true" ]; then
+            CORE_TAGS+=("-t" "ghcr.io/guardianvigil-lab/vigil:core-${TAG_NAME}")
           fi
           docker buildx imagetools create "${CORE_TAGS[@]}" \
             ghcr.io/guardianvigil-lab/vigil:core-amd64 \
             ghcr.io/guardianvigil-lab/vigil:core-arm64
 
       - name: Merge & Publish Multi-Arch Full / Latest Manifest
+        env:
+          SHORT_SHA: ${{ steps.meta.outputs.short_sha }}
+          IS_TAG: ${{ steps.meta.outputs.is_tag }}
+          TAG_NAME: ${{ steps.meta.outputs.tag_name }}
         run: |
-          FULL_TAGS=("-t" "ghcr.io/guardianvigil-lab/vigil:latest" "-t" "ghcr.io/guardianvigil-lab/vigil:full" "-t" "ghcr.io/guardianvigil-lab/vigil:${{ steps.meta.outputs.short_sha }}")
-          if [ "${{ steps.meta.outputs.is_tag }}" = "true" ]; then
-            FULL_TAGS+=("-t" "ghcr.io/guardianvigil-lab/vigil:${{ steps.meta.outputs.tag_name }}")
+          FULL_TAGS=("-t" "ghcr.io/guardianvigil-lab/vigil:latest" "-t" "ghcr.io/guardianvigil-lab/vigil:full" "-t" "ghcr.io/guardianvigil-lab/vigil:${SHORT_SHA}")
+          if [ "${IS_TAG}" = "true" ]; then
+            FULL_TAGS+=("-t" "ghcr.io/guardianvigil-lab/vigil:${TAG_NAME}")
           fi
           docker buildx imagetools create "${FULL_TAGS[@]}" \
             ghcr.io/guardianvigil-lab/vigil:full-amd64 \

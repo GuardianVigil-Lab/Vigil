@@ -20,7 +20,20 @@ FULL_IMAGE="${VIGIL_FULL_IMAGE:-ghcr.io/guardianvigil-lab/vigil:latest}"
 LOCAL_CORE_IMAGE="vigil:core"
 LOCAL_FULL_IMAGE="vigil:local"
 
-VIGIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Locate Vigil directory (allows VIGIL_DIR override, checks script parent, current dir, /opt/vigil, /tools/vigil)
+if [ -n "${VIGIL_DIR:-}" ] && [ -f "${VIGIL_DIR}/vigil.sh" ]; then
+  : # VIGIL_DIR already set and valid
+elif [ -f "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/vigil.sh" ]; then
+  VIGIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+elif [ -f "$(pwd)/vigil.sh" ]; then
+  VIGIL_DIR="$(pwd)"
+elif [ -f "/opt/vigil/vigil.sh" ]; then
+  VIGIL_DIR="/opt/vigil"
+elif [ -f "/tools/vigil/vigil.sh" ]; then
+  VIGIL_DIR="/tools/vigil"
+else
+  VIGIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
 TARGET_WORKSPACE="$(pwd)"
 
 # Ensure cache and reports directory exist on host
@@ -73,28 +86,46 @@ done
 if [ "$STANDALONE" = true ]; then
   if [ -f "${VIGIL_DIR}/vigil.sh" ]; then
     exec bash "${VIGIL_DIR}/vigil.sh" "${FILTERED_ARGS[@]}"
+  elif [ -f "$(pwd)/vigil.sh" ]; then
+    exec bash "$(pwd)/vigil.sh" "${FILTERED_ARGS[@]}"
   else
-    echo "Error: Host orchestrator '${VIGIL_DIR}/vigil.sh' not found for --standalone mode." >&2
+    echo "Error: Host orchestrator 'vigil.sh' not found for --standalone mode." >&2
+    echo "Standalone mode requires the Vigil source repository. Run from within the cloned repository" >&2
+    echo "or use containerized batteries with Docker: vigil [battery]" >&2
     exit 1
   fi
 fi
 
 # Build local images if requested
 if [ "${1:-}" = "--build" ]; then
+  DOCKERFILE_PATH="${VIGIL_DIR}/Dockerfile"
+  BUILD_CONTEXT="${VIGIL_DIR}"
+  if [ ! -f "${DOCKERFILE_PATH}" ]; then
+    if [ -f "$(pwd)/Dockerfile" ]; then
+      DOCKERFILE_PATH="$(pwd)/Dockerfile"
+      BUILD_CONTEXT="$(pwd)"
+    else
+      echo "Error: 'Dockerfile' not found at '${DOCKERFILE_PATH}' or '$(pwd)/Dockerfile'." >&2
+      echo "Building container images requires the Vigil source repository." >&2
+      echo "Clone the repository from https://github.com/GuardianVigil-Lab/Vigil and run from its root." >&2
+      exit 1
+    fi
+  fi
+
   BUILD_TARGET="${2:-}"
   case "${BUILD_TARGET}" in
     core)
       echo "Building Vigil Core container image (${LOCAL_CORE_IMAGE})..."
-      docker build --target core -t "${LOCAL_CORE_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+      docker build --target core -t "${LOCAL_CORE_IMAGE}" -f "${DOCKERFILE_PATH}" "${BUILD_CONTEXT}"
       ;;
     full)
       echo "Building Vigil Full container image (${LOCAL_FULL_IMAGE})..."
-      docker build --target full -t "${LOCAL_FULL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+      docker build --target full -t "${LOCAL_FULL_IMAGE}" -f "${DOCKERFILE_PATH}" "${BUILD_CONTEXT}"
       ;;
     *)
       echo "Building Vigil Core and Full container images..."
-      docker build --target core -t "${LOCAL_CORE_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
-      docker build --target full -t "${LOCAL_FULL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+      docker build --target core -t "${LOCAL_CORE_IMAGE}" -f "${DOCKERFILE_PATH}" "${BUILD_CONTEXT}"
+      docker build --target full -t "${LOCAL_FULL_IMAGE}" -f "${DOCKERFILE_PATH}" "${BUILD_CONTEXT}"
       ;;
   esac
   exit 0
