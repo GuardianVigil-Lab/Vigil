@@ -139,7 +139,7 @@ RUN case "${TARGETARCH}" in \
       arm64) NODE_ARCH="arm64"; GO_ARCH="arm64" ;; \
       *)     NODE_ARCH="x64";   GO_ARCH="amd64" ;; \
     esac && \
-    curl -fsSL https://nodejs.org/dist/latest-v26.x/node-v26.10.0-linux-${NODE_ARCH}.tar.gz | tar -xz --strip-components=1 -C /usr/local && \
+    curl -fsSL https://nodejs.org/dist/v26.10.0/node-v26.10.0-linux-${NODE_ARCH}.tar.gz | tar -xz --strip-components=1 -C /usr/local && \
     curl -fsSL https://go.dev/dl/go1.27.1.linux-${GO_ARCH}.tar.gz | tar -xz -C /usr/local
 ENV PATH="/usr/local/go/bin:/go/bin:/usr/local/bin:$PATH"
 ENV GOPATH="/go"
