@@ -4,15 +4,23 @@
 Flags code paths that return plausible-looking production findings when the real
 source is unavailable, disconnected UI mock handlers, and simulated business logic.
 
-  python3 detect.py [paths...]           # default: src/ and backend/
-  python3 detect.py --changed            # files changed vs HEAD (local)
-  python3 detect.py --changed=origin/main  # files changed vs a base ref (CI)
+  python3 detector.py [paths...]             # default: src/ and backend/, else .
+  python3 detector.py --changed              # files changed vs HEAD (local)
+  python3 detector.py --changed=origin/main  # files changed vs a base ref (CI)
+  python3 detector.py --json-out=report.json # also write findings as JSON
+  python3 detector.py --config=path.json     # project settings (default .vigil/fabrication.json)
+  python3 detector.py --self-check           # prove every rule still fires
+
+Project settings are optional. See docs/CUSTOM_RULES.md for the file format:
+exemptions with reasons, tracked debt, the module that owns scoring, extra
+model-call and evidence patterns, and extra allowed paths.
 
 Exit codes: 0 clean, 1 findings, 2 bad usage.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -51,9 +59,9 @@ FAKE_NAME = re.compile(
 )
 
 # A function that admits in its own comments that it is not real, sitting above
-# a literal return. `compute_similarity_score` returned a hardcoded 0.925
-# described as a "High-confidence similarity match" and went unflagged for
-# months because no other rule looks at prose. The comment is the tell.
+# a literal return: a similarity function returning a hardcoded 0.925 described
+# as a "high-confidence match". No other rule looks at prose; the comment is the
+# tell.
 SIMULATION_TELL = re.compile(
     r"simulat(?:e|es|ed|ion)|in\s+production,?\s+this|for\s+now,?\s+return|"
     r"placeholder|stub(?:bed)?\s+(?:out|value|response)|would\s+(?:normally\s+)?compute",
@@ -73,38 +81,29 @@ BLOCK_BOUNDARY = re.compile(
 # A bare literal handed back as a result: `return 0.925`, `return 87`, `= 0.92`.
 LITERAL_RETURN = re.compile(r"\breturn\s+(?:0?\.\d+|\d{1,3}(?:\.\d+)?)\s*(?:$|[#;/])")
 
-# An LLM prompt asking the model to invent security data.
-#
-# This rule exists because fetchLatestThreatsAction went unflagged for months:
-# it prompted Gemini to "Generate 4 realistic newly discovered Indicators of
-# Compromise" and fed the result into the analyst's workspace every 120
-# seconds. No other rule looks at prompt text, only at literals — but a model
-# told to invent IOCs produces exactly the fabricated attribution this whole
-# detector exists to stop, just at runtime instead of in the source.
+# An LLM prompt asking the model to invent security data, such as "Generate 4
+# realistic newly discovered Indicators of Compromise" fed into a product as if
+# observed. A model told to invent IOCs produces exactly the fabricated
+# attribution this detector exists to stop, at runtime instead of in source.
 GENERATED_INTEL = re.compile(
     r"(?:generate|invent|fabricate|make\s+up|come\s+up\s+with|simulate)"
-    # Quotes must be allowed through: the prompt this rule was written for reads
-    # `Generate 4 realistic "newly discovered" Indicators of Compromise`, and
-    # excluding them to avoid crossing string boundaries missed it entirely.
+    # Quotes must be allowed through: `Generate 4 realistic "newly discovered"
+    # Indicators of Compromise` is missed entirely if they are excluded.
     r"[^\n]{0,80}?"
     r"(?:indicators?\s+of\s+compromise|\bIOCs?\b|threat\s+(?:actor|feed|intel)"
     r"|malware\s+famil|attribution|\bAPT\b|\bC2\b)",
     re.IGNORECASE,
 )
 
-# A security finding decided by inspecting the query string.
+# A security finding decided by inspecting the query string, e.g.
 #
-# This rule exists because `correlateDarkWebBreaches` went unflagged through a
-# full-repo scan of 157 files. It decided whether an address was breached with
+#     const isExposed = target.includes("admin") || target.includes("test")
+#                       || target.includes("corp") || ...
 #
-#     const isExposed = cleanTarget.includes("admin") || cleanTarget.includes("test")
-#                       || cleanTarget.includes("corp") || ...
-#
-# and then returned a hardcoded list of four breaches, one of them invented, as
-# `verified: true` at `CRITICAL`. Every other rule here looks for a literal
-# verdict, a literal score, a fake-sounding name or a simulation comment. This
-# had none: the verdict was *computed*, and computed honestly-looking code from
-# a substring test on the user's own input.
+# followed by a hardcoded list of breaches returned as verified. Every other
+# rule looks for a literal verdict, score, fake-sounding name or simulation
+# comment; this has none, because the verdict is *computed* from a substring
+# test on the user's own input.
 #
 # The tell is the shape. Real intelligence comes from a provider; an indicator
 # that decides its own reputation by containing the word "admin" is a
@@ -122,7 +121,7 @@ SUBSTRING_VERDICT = re.compile(
 
 # The same shape spread over several lines: the assignment opens on one line and
 # the chain of tests continues below. Counted rather than matched in one go,
-# because the real instance ran to eleven `.includes()` calls across ten lines.
+# because such a chain can run to a dozen `.includes()` calls over many lines.
 SUBSTRING_TEST = re.compile(r"\.includes\(|\.indexOf\(|strings\.Contains\(")
 VERDICT_VARIABLE = re.compile(
     r"""\b(?:const|let|var)\s+
@@ -132,22 +131,14 @@ VERDICT_VARIABLE = re.compile(
     re.VERBOSE | re.IGNORECASE,
 )
 
-# Fabricated *operational state*, as opposed to a fabricated verdict.
+# Fabricated *operational state*, as opposed to a fabricated verdict, e.g. a
+# webhook list that returns
 #
-# `getWebhooks()` in src/services/integrationService.ts returned two invented
-# integrations:
+#     { name: 'Slack Alerts', status: 'Active', lastFired: new Date().toISOString() }
 #
-#     { name: 'Slack Alerts', url: 'https://hooks.slack.com/services/...',
-#       status: 'Active', lastFired: new Date().toISOString() }
-#
-# and WebhookPanel rendered that status in green. The Integrations Hub reported
-# two live webhooks, one fired moments ago. None existed and nothing had ever
-# been delivered.
-#
-# Every rule above looks for a fabricated security finding. This one passed the
-# whole detector because it invents a *status* rather than a verdict — no score,
-# no reputation, no CVE, nothing named like malware. Same defect, different
-# vocabulary: an empty-result path returning plausible-looking configuration.
+# when nothing is configured: a panel shows a live integration that fired
+# moments ago, and none exists. Same defect as a fabricated finding, different
+# vocabulary.
 #
 # Two tells, and the timestamp is the stronger one. A field named for when
 # something last happened, assigned the current time, is a claim that an event
@@ -161,24 +152,15 @@ FRESH_EVENT_TIMESTAMP = re.compile(
     re.VERBOSE | re.IGNORECASE,
 )
 
-# A state asserted as a literal.
-#
-# The first version listed only healthy-sounding values — Active, Connected,
-# Online — on the reasoning that claiming something works is the dangerous
-# direction. That was wrong, and the same file proved it: `ChartsPanel.tsx`
-# rendered "Top Vulnerable Assets" with `status: 'Compromised'` on a named
-# domain controller at 92% risk, and this rule walked straight past it.
-#
-# Asserting that a customer's server is compromised is not safer than asserting
-# a webhook is active. It is worse. The direction of the claim was never the
-# point; the point is that a literal state in a data array is a claim about
+# A state asserted as a literal. Both directions count: `status: 'Compromised'`
+# on a named server nobody examined is no safer than `status: 'Active'` on a
+# webhook that does not exist. A literal state in a data array is a claim about
 # something nobody looked at.
 ASSERTED_STATE_LITERAL = re.compile(
     r"""\b(?:status|state|health|connection|severity|risk)\s*:\s*
         ["'](?:Active|Connected|Online|Healthy|Enabled|Operational|Live
             |Compromised|Vulnerable|Exposed|Breached|Infected|Degraded
             |Blocked|Clustered|Quarantined|Monitor
-            # The dashboard health tile's invented perimeter (#374).
             |Optimal|Attention\s+Needed)["']""",
     re.VERBOSE | re.IGNORECASE,
 )
@@ -190,43 +172,32 @@ EMPTY_DIGESTS = {
     "da39a3ee5e6b4b0d3255bfef95601890afd80709",                          # sha1("")
 }
 
-# Paths where invented data is legitimate and labelled as such.
-ALLOWED = (
-    # src/data/seed/ is not here any more: see LEGACY_ONLY_SKIP below (#373).
-    "src/data/demo/",
+# Paths where invented data is legitimate: tests, fixtures and tooling. A
+# project adds its own with `allowed_paths` in its settings file.
+ALLOWED_DEFAULT = (
     "test_samples/",
     "_test.go",
     ".test.ts",
+    ".test.tsx",
     ".spec.ts",
-    # Test support that is not itself named *.test.ts: the shared injection
-    # corpus, and Python's test_*.py (#373 was the first rule to reach them).
+    # Test support not itself named *.test.ts, and Python's test_*.py.
     "__tests__/",
     "/test_",
-    # Leading slashes omitted: --changed yields repo-relative paths, so
-    # "/.claude/skills/" never matched and the detector flagged its own rules.
+    # No leading slashes: --changed yields repo-relative paths.
     ".claude/skills/",
     "node_modules/",
     ".next/",
-    ".graphify/",
     "scripts/",
-    # Fixed example graph, captioned "Example graph — not clustered from live
-    # detections" and badged <DemoBadge /> in the UI.
-    #
-    # Not replaceable by wiring /ml/cluster, contrary to the original C38 note:
-    # that endpoint *takes* nodes and edges and returns the connected component
-    # around a root. It analyses a graph, it does not produce one. Nothing in
-    # the product yet stores a corpus of related detections to feed it, so this
-    # stays labelled until a real metrics pipeline exists.
-    "components/AifeInfraGraph.tsx",
 )
+ALLOWED = ALLOWED_DEFAULT
 
 SUFFIXES = {".ts", ".tsx", ".go", ".py"}
 
-# Shipped data files (#451). The C2 catalogue was a .json beside its generator,
-# and only the generator was ever read: its empty-input "Cobalt Strike" body
-# hash sat in the data the classifier loaded. Data files get the two rules that
-# can be wrong in data alone — an empty-input digest and an all-zero JARM —
-# and none of the code rules, which would read ATT&CK's own prose as claims.
+# Shipped data files. A signature catalogue kept as .json beside its generator
+# is data a classifier loads, and reading only the generator misses an
+# empty-input hash in it. Data files get the two rules that can be wrong in data
+# alone — an empty-input digest and an all-zero JARM — and none of the code
+# rules, which would read ATT&CK's own prose as claims.
 DATA_JSON_DIRS = ("/data/",)
 ZERO_JARM = re.compile(r"(?<![0-9a-fA-F])0{62}(?![0-9a-fA-F])")
 
@@ -240,24 +211,19 @@ def data_findings(rel: str, lines: list[str]) -> list[Finding]:
             out.append(Finding(rel, i + 1, "zero-jarm-as-fingerprint", line))
     return out
 
-# The rules below were exempt from nothing but tests (#373). `src/data/seed/` is
-# in ALLOWED because its ATT&CK data and actor profiles legitimately name actors
-# and families, and that exemption is exactly how the fourteenth fabrication came
-# back (#357): a "global radar" of invented verdicts and a "live" attack stream
-# both lived in `src/data/seed/` and were never read. So the v2 rules scan seed
-# files too; the original rules still skip them.
+# Seed directories legitimately name actors and families (ATT&CK data, actor
+# profiles), so the original vocabulary rules skip them. The v2 rules still read
+# them: a seed file is also where an invented "live" feed can hide.
 LEGACY_ONLY_SKIP = ("src/data/seed/",)
 
 
-# --- v2 rules (#373) ---------------------------------------------------------
+# --- v2 rules ----------------------------------------------------------------
 #
-# Each is written against an artefact that shipped and is pinned by
-# `--self-check` with that artefact's own shape. They run over src/, backend/
-# and the seed directory.
+# Each is pinned by `--self-check` against the shape it was written for and a
+# near miss it must leave alone. They run over everything, seed files included.
 
-# A verdict, actor or family written as a literal into UI code or data. The
-# global radar carried `reputation: 'Malicious'`, `threatActor: 'APT28 (Fancy
-# Bear)'` and `malwareFamily: 'Cobalt Strike'` on an address nobody had scanned.
+# A verdict, actor or family written as a literal into UI code or data, e.g.
+# `reputation: 'Malicious', threatActor: 'APT28'` on an address nobody scanned.
 # A type union (`verdict: 'Clean' | 'Malicious'`) is a type, not a claim.
 UI_VERDICT_LITERAL = re.compile(
     r"""\b(?:threatActor|malwareFamily)\s*:\s*["'][^"']
@@ -279,47 +245,39 @@ DOC_ADDRESS = re.compile(
 )
 
 # The always-current fake: a record whose timestamp is computed from the clock at
-# render time, so it is "36 hours ago" whenever the page is opened. RansomwareRadar
-# gave invented victims `claimedDate: new Date(Date.now() - 36 * 3600 * 1000)`
-# and a deadline 48 hours out, forever. A property, not an expression: computing
+# render time, so it is "36 hours ago" whenever the page is opened, e.g.
+# `claimedDate: new Date(Date.now() - 36 * 3600 * 1000)`. A property, not an
+# expression: computing
 # a query window (`since = Date.now() - 30 days`) is how real code asks for data.
 ALWAYS_CURRENT = re.compile(
     r"\b\w+\s*:\s*(?:new\s+Date\(\s*)?(?:Date\.now\(\)|new\s+Date\(\)\.getTime\(\))\s*[-+]\s*[\d(]"
 )
 
-# A declaration whose name says it is not real. `SAMPLE_ATTACK_STREAM` was the
-# "live" attack stream. `FAKE_NAME` above covers mock/dummy; these are the
-# prefixes #357 found.
+# A declaration whose name says it is not real, e.g. `SAMPLE_ATTACK_STREAM`
+# rendered as a live stream. `FAKE_NAME` above covers mock/dummy.
 DEMO_NAMED = re.compile(
     r"\b(?:const|let|var)\s+(?:(?:SAMPLE|MOCK|DEMO)_[A-Z0-9_]+|simulated[A-Z]\w*)\b"
     r"|\b(?:(?:SAMPLE|MOCK|DEMO)_[A-Z0-9_]+|simulated[A-Z]\w*)\s*(?::=|=[^=])"
 )
 
-# A score or reputation written anywhere but the pipeline that owns it. The
-# browser's OT enrichment raised `result.score` to 85 and set `result.reputation
-# = 'Malicious'` on a honeypot observation that never happened (#360). A verdict
-# has one author: scoring.go, where every point carries its evidence.
+# A score or reputation written anywhere but the module that owns it. Opt-in:
+# it runs only when a project names its scoring module(s) in `score_owners`,
+# because "a verdict has one author" is a design choice, not a universal rule.
 SCORE_ASSIGNMENT = re.compile(r"\.(?:score|reputation|Score|Reputation)\s*(?:=|\+=|-=)(?!=)")
-SCORE_OWNERS = ("backend/scanner-service/scoring.go",)
+SCORE_OWNERS: tuple[str, ...] = ()
 
-# A route that answers a failure with a success and a canned body (#359). The OT
-# feed swallowed a gateway error and served an invented blocklist at 200 —
-# a firewall pulling it would have blocked six addresses nobody observed. Read
+# A route that answers a failure with a success and a canned body, e.g. a feed
+# that swallows an upstream error and serves a hardcoded blocklist at 200. Read
 # by `canned_fallbacks`, which needs the block structure a regex cannot see.
 FAILURE_BRANCH = re.compile(r"\}\s*catch\b|\bcatch\s*[({]|if\s*\(\s*!\s*[\w.]+\.ok\s*\)")
 RESPONSE_CALL = re.compile(r"(?:NextResponse|Response)\.json\(|new\s+(?:Next)?Response\(")
 ERROR_STATUS = re.compile(r"status:\s*(?:[1345]\d\d\b|[\w.]*[Ss]tatus\b)")
 
-# An actor or C2 family chosen by a substring of the indicator (#449). The
-# attribution engine linked anything containing "45.142" or "cisco" to Volt
-# Typhoon and everything else to APT29; the block-evidence resolver called any
-# indicator containing "brute" Brute Ratel C4 at 96%. A substring test on a
-# string, followed within three lines by an actor or family, is that shape.
-#
-# Python too (#470): the sandbox worker labelled a carve "Sliver Implant
-# Metadata" on `b"sliver" in carved_bytes.lower()` and "Havoc C2 Demon Stager"
-# on `b"Demon" in carved_bytes`, appending to a list of C2 signatures. The
-# rule read only TypeScript and Go, so it never saw them.
+# An actor or C2 family chosen by a substring of the indicator: anything
+# containing "cisco" attributed to one group, or "brute" labelled Brute Ratel.
+# A substring test on a string, followed within three lines by an actor or
+# family, is that shape. Python too: `if b"sliver" in data:` appending a C2
+# signature label is the same defect.
 KEYWORD_TEST = re.compile(
     r"""\.includes\(\s*["'][^"']+["']\s*\)|strings\.Contains\(\s*[\w.]+\s*,\s*"[^"]+"\s*\)"""
     r"""|(?<!\w)b?["'][^"']+["']\s+in\s+[\w.]+"""
@@ -334,48 +292,24 @@ JUDGEMENT_PICK = re.compile(
 # A keyword list tested by substring (`kws.some((kw) => x.includes(kw))`), and
 # an ATT&CK technique id being emitted. Together, within a few lines, they are
 # a technique chosen by a word in the input rather than by an observation —
-# the email mapping's `.ru` → "Acquire Infrastructure" and `account` →
-# "credential harvesting" (#466).
+# `.ru` in a domain mapped to "Acquire Infrastructure", say.
 KEYWORD_SOME = re.compile(r"\.some\(\s*\(?\s*\w+\s*\)?\s*=>\s*[\w.]+\.includes\(\s*\w+\s*\)")
 TECHNIQUE_PICK = re.compile(r"""\bid\s*:\s*["']T\d{4}(?:\.\d{3})?["']""")
 TECHNIQUE_WINDOW = 15
 
-# Real fabrications that are known, tracked and not yet removed (#453). Not
-# exemptions: each names the open issue that removes it, a full sweep lists them
-# every time it runs, and an entry that no longer matches fails like a stale
-# exemption — so the list can only shrink. This is what lets the full sweep
-# block in CI while the last of the debt is still being paid.
-KNOWN_DEBT: dict[tuple[str, str], str] = {
-    # Empty since #451 retired the C2 catalogue. Keep it that way.
-}
+# Real fabrications that are known, tracked and not yet removed. Not
+# exemptions: each names the open issue that removes it ("#123: why"), a full
+# sweep lists them every time it runs, and an entry that no longer matches fails
+# like a stale exemption — so the list can only shrink. Read from the project's
+# settings file (`known_debt`).
+KNOWN_DEBT: dict[tuple[str, str], str] = {}
 DEBT_REF = re.compile(r"^#\d+: ")
 
-# Files where a v2 rule's hit is not a fabrication, with the reason. Keyed by
-# (path, rule). An entry that no longer matches anything fails a full sweep: an
-# exemption for code that is gone is a claim nobody re-checked.
-V2_EXEMPT: dict[tuple[str, str], str] = {
-    ("backend/scanner-service/identity.go", "score-outside-scoring"):
-        "copies EmailRep's own reputation word (high/medium/low/none) from its answer; "
-        "an observation passed through, never a score this service assigns (#369)",
-    ("src/components/hunt/StealerBreachRadar.tsx", "documentation-address"):
-        "the paste box's example stealer log, parsed only when the analyst presses Parse",
-    ("src/components/hunt/StealerBreachRadar.tsx", "demo-named-data"):
-        "SAMPLE_REDLINE_DUMP is that example log, uses documentation addresses on purpose",
-    ("src/components/cix/ConsoleCixCenter.tsx", "documentation-address"):
-        "the Defense Synthesizer's example input and the cix.py usage text",
-    ("src/lib/intelligence/nl2query.ts", "documentation-address"):
-        "a STIX pattern syntax example inside the query-writing prompt",
-    ("src/components/dashboard/QuickStartDock.tsx", "demo-named-data"):
-        "SAMPLE_CHIPS are click-to-scan examples; the live scan, not the chip, gives the verdict",
-    ("src/lib/storage/archive.ts", "demo-named-data"):
-        "SAMPLE_BUCKET is the MinIO bucket for submitted malware samples",
-    ("backend/soar-service/synthesizer.go", "score-outside-scoring"):
-        "copies the scanner's own score onto a rule target; it computes nothing",
-    # Exemptions cover the original rules too since #449; before, only v2 hits could be.
-    ("backend/aife-collector/diff.go", "invented-event-timestamp"):
-        "LastSeen is when the collector processed a real observation, used for its own "
-        "one-hour dedupe window; it is not presented as when anything was seen",
-}
+# Files where a rule's hit is not a fabrication, with the reason. Keyed by
+# (path, rule) and read from the project's settings file (`exempt`). An entry
+# that no longer matches anything fails a full sweep: an exemption for code
+# that is gone is a claim nobody re-checked.
+V2_EXEMPT: dict[tuple[str, str], str] = {}
 
 
 class Finding:
@@ -434,7 +368,7 @@ def is_simulated_value(lines: list[str], index: int, window: int = 6) -> bool:
 def is_outbound_config(lines: list[str], index: int, window: int = 8) -> bool:
     """Is this line inside a request body we are sending, rather than a claim?
 
-    `Status: "Enabled"` in a MinIO `setBucketLifecycle` call turns a policy on —
+    `Status: "Enabled"` in a `setBucketLifecycle` call turns a policy on —
     it reports nothing to anyone. The tell is a nearby call that configures or
     sends, above the line in question.
     """
@@ -447,15 +381,13 @@ def is_outbound_config(lines: list[str], index: int, window: int = 8) -> bool:
 
 
 
-# --- prompts that ask a model to invent a finding (#183) ---------------------
+# --- prompts that ask a model to invent a finding ---------------------------
 #
 # The detector above reads *code*: canned literals on an error path. It cannot
-# see a prompt, and that is how `enrichIndicator` shipped — it sent the model a
-# single string, the indicator, and asked back a threatScore, a confidence
-# figure, a tool family and an APT attribution. Every field came out of the
-# model. Twelve fabrications had been removed from this codebase by then and a
-# second independent review missed this one, because nothing that inspects code
-# looks inside a string literal.
+# see a prompt — one that sends a model a single string, the indicator, and asks
+# back a threatScore, a confidence figure and an APT attribution. Every field
+# comes out of the model, and nothing that inspects code looks inside a string
+# literal.
 #
 # The rule: **a prompt may not request a field it was given no evidence for.**
 # If a file calls a model, asks for a judgement-shaped field, and holds none of
@@ -464,20 +396,18 @@ def is_outbound_config(lines: list[str], index: int, window: int = 8) -> bool:
 # The file talks to a model at all. Without this every type definition in the
 # repository would be a candidate.
 #
-# **This list is load-bearing and easy to break.** #185 moved every caller from
-# `genAI.models.generateContent(...)` onto a `generate({ tier, prompt, parse })`
-# seam, and the rule below went dark the same commit: the identical fabrication,
-# written in the new call style, passed clean. Nothing failed — a detector that
-# matches nothing reports success.
-#
-# So the anchor is now the **import of the AI module**, which a caller cannot
-# drop while still calling a model, rather than the name of a method that can be
-# renamed underneath it. `--self-check` pins both spellings.
-MODEL_CALL = re.compile(
+# **This list is load-bearing and easy to break.** A project that routes every
+# call through its own wrapper (`generate({ prompt, parse })`) hides the SDK
+# names below, and the rule goes dark with no failure: a detector that matches
+# nothing reports success. Name the wrapper's import in `model_call_patterns`;
+# `--self-check` pins both the SDK spelling and a configured wrapper.
+MODEL_CALL_DEFAULT = (
     r"generateContent|genAI\.models|models\.generate"
-    r"|lib/core/ai|\bModelTier\b|tier:\s*[\"'](?:fast|reason)[\"']",
-    re.IGNORECASE,
+    r"|chat\.completions\.create|messages\.create|responses\.create"
+    r"|@anthropic-ai/sdk|@google/genai|from\s+[\"']openai[\"']"
+    r"|^\s*(?:import|from)\s+(?:openai|anthropic|google\.genai)\b"
 )
+MODEL_CALL = re.compile(MODEL_CALL_DEFAULT, re.IGNORECASE | re.MULTILINE)
 
 # A requested output schema: a quoted key followed by a type word, or by a
 # union of quoted literals. `"threatScore": number` and
@@ -485,7 +415,7 @@ MODEL_CALL = re.compile(
 # judgement; `threatScore: row.score` is code reading one.
 JUDGEMENT_FIELD = re.compile(
     r"""["'](?P<field>threat_?score|risk_?score|score|verdict|severity|"""
-    r"""confidence|aife_confidence|attribution|threat_?actor|"""
+    r"""confidence|attribution|threat_?actor|"""
     r"""malware_?family|tool_?family|disposition)["']\s*:\s*"""
     r"""(?:number|string|boolean|int|float|["'])""",
     re.IGNORECASE,
@@ -493,13 +423,13 @@ JUDGEMENT_FIELD = re.compile(
 
 # Words that only appear when observed evidence is being handed to the model.
 # Deliberately broad: the check is "did you supply anything at all", and a
-# false pass here is cheaper than a rule nobody can satisfy honestly.
-EVIDENCE_SUPPLIED = re.compile(
-    r"platforms|proofPoints|scoreBreakdown|providersAnswered|providers_answered|"
-    r"getIndicatorHistory|getLatestScanEvidence|sightings|evidenceBlock|"
-    r"OBSERVED EVIDENCE|capabilities|yaraMatches|corroboration",
-    re.IGNORECASE,
+# false pass here is cheaper than a rule nobody can satisfy honestly. A project
+# adds its own names with `evidence_markers`.
+EVIDENCE_DEFAULT = (
+    r"evidence|observed|observations|sightings|scan_?results|providerResults|"
+    r"capabilities|yaraMatches|corroboration"
 )
+EVIDENCE_SUPPLIED = re.compile(EVIDENCE_DEFAULT, re.IGNORECASE)
 
 
 def prompt_findings(rel: str, text: str, lines: list[str]) -> list[Finding]:
@@ -565,7 +495,7 @@ def canned_fallbacks(lines: list[str]) -> list[int]:
 
     Two shapes: the response is inside the `catch` / `if (!res.ok)` block, or
     the block swallows the failure (no return, no throw) and the next response
-    after it is the canned one — the OT feed's shape.
+    after it is the canned one — a feed that logs the error and serves its snapshot anyway.
     """
     def offends(k: int) -> bool:
         args = _response_args(lines, k)
@@ -598,7 +528,7 @@ def canned_fallbacks(lines: list[str]) -> list[int]:
 
 
 def v2_findings(rel: str, suffix: str, lines: list[str]) -> list[Finding]:
-    """The #373 rules. Comments are skipped; exemptions are applied by the caller."""
+    """The v2 rules. Comments are skipped; exemptions are applied by the caller."""
     out: list[Finding] = []
     ui = rel.startswith(UI_PATHS) or "/src/components/" in rel or "/src/data/" in rel
     route = suffix == ".ts" and rel.endswith("route.ts") and "app/" in rel
@@ -613,14 +543,14 @@ def v2_findings(rel: str, suffix: str, lines: list[str]) -> list[Finding]:
             out.append(Finding(rel, i + 1, "documentation-address", line))
         if ALWAYS_CURRENT.search(line):
             out.append(Finding(rel, i + 1, "always-current-fake", line))
-        # Moved here from the original rules so it reaches seed files (#373).
+        # Here rather than in the original rules so it reaches seed files.
         if any(d in line for d in EMPTY_DIGESTS):
             out.append(Finding(rel, i + 1, "empty-input-digest-as-sample", line))
         if ZERO_JARM.search(line):
             out.append(Finding(rel, i + 1, "zero-jarm-as-fingerprint", line))
         if DEMO_NAMED.search(line):
             out.append(Finding(rel, i + 1, "demo-named-data", line))
-        if SCORE_ASSIGNMENT.search(line) and not rel.endswith(SCORE_OWNERS):
+        if SCORE_OWNERS and SCORE_ASSIGNMENT.search(line) and not rel.endswith(SCORE_OWNERS):
             out.append(Finding(rel, i + 1, "score-outside-scoring", line))
         if KEYWORD_TEST.search(line) and any(
             JUDGEMENT_PICK.search(l) for l in lines[i:i + 4] if not l.strip().startswith(("//", "#", "*"))
@@ -645,8 +575,7 @@ def scan_file(path: Path) -> list[Finding]:
 
 
 def scan_text(rel: str, suffix: str, text: str) -> list[Finding]:
-    """Every finding, less the exemptions (which cover every rule since #449)
-    and the tracked debt (#453)."""
+    """Every finding, less the project's exemptions and tracked debt."""
     return [f for f in raw_findings(rel, suffix, text)
             if (rel, f.rule) not in V2_EXEMPT and (rel, f.rule) not in KNOWN_DEBT]
 
@@ -733,7 +662,7 @@ def raw_findings(rel: str, suffix: str, text: str) -> list[Finding]:
 
         # Python docstrings are prose, like comments. Without this, a module
         # docstring describing a fabrication that was *removed* reads as one
-        # still present — docker_runner.py's header explains the bug it fixed.
+        # still present.
         if suffix == ".py" and stripped.count('"""') % 2 == 1:
             in_docstring = not in_docstring
             continue
@@ -774,7 +703,7 @@ def raw_findings(rel: str, suffix: str, text: str) -> list[Finding]:
         # union test the verdict rule uses applies here.
         #
         # And a state being *sent* to a third party is configuration, not a
-        # report: MinIO's lifecycle API takes `Status: "Enabled"` to turn a rule
+        # report: an object store's lifecycle API takes `Status: "Enabled"` to turn a rule
         # on. Only a state we are asserting back to our own user is a claim, so
         # a line inside an outbound request body is skipped.
         if (
@@ -804,18 +733,23 @@ def raw_findings(rel: str, suffix: str, text: str) -> list[Finding]:
 # --- self-check ------------------------------------------------------------
 #
 # A detector that matches nothing reports success, which is the one failure mode
-# it cannot tell you about. #185 proved that is not theoretical: a refactor of
-# the call sites disabled the prompt rule in the same commit that introduced it,
-# silently, with a green gate.
+# it cannot tell you about: a refactor of the call sites can disable the prompt
+# rule silently, with a green gate.
 #
-# So the rules are pinned against fixtures. `--self-check` runs in `ci-local.sh`
-# beside the scan itself; it needs no network, no repository and about no time.
+# So the rules are pinned against fixtures. `--self-check` needs no network, no
+# repository and about no time; run it in CI beside the scan itself. It uses its
+# own settings (SELF_CHECK_SETTINGS), never the project's.
+
+SELF_CHECK_SETTINGS = {
+    "score_owners": ["backend/api/scoring.go"],
+    "model_call_patterns": [r"lib/ai\b"],
+}
 
 SELF_CHECK_CASES: list[tuple[str, str, bool]] = [
     (
-        "the original defect, in its original call style (#183)",
+        "a prompt asking for a score and attribution with nothing supplied",
         '''
-        import { genAI } from "@/lib/core/genai";
+        import { GoogleGenAI } from "@google/genai";
         const r = await genAI.models.generateContent({
           contents: `Analyse "${indicator}". Return JSON:
             { "threatScore": number, "attribution": "string" }`,
@@ -824,10 +758,10 @@ SELF_CHECK_CASES: list[tuple[str, str, bool]] = [
         True,
     ),
     (
-        "the same defect through the #185 seam — this is what went dark",
+        "the same request through a project wrapper named in model_call_patterns",
         '''
-        import { generate } from "@/lib/core/ai";
-        return generate({ tier: "fast", prompt: `Analyse it. Return JSON:
+        import { generate } from "@/lib/ai";
+        return generate({ prompt: `Analyse it. Return JSON:
           { "threatScore": number, "severity": "Critical" | "High" }`, parse: (v) => v });
         ''',
         True,
@@ -835,18 +769,18 @@ SELF_CHECK_CASES: list[tuple[str, str, bool]] = [
     (
         "a verdict asked for with no evidence supplied",
         '''
-        import { generate } from "@/lib/core/ai";
-        return generate({ tier: "fast", prompt: `Triage this alert. Return JSON:
-          { "verdict": "True Positive" | "False Positive" }`, parse: (v) => v });
+        import OpenAI from "openai";
+        const r = await client.chat.completions.create({ messages: [{ role: "user",
+          content: `Triage this alert. Return JSON: { "verdict": "True Positive" | "False Positive" }` }] });
         ''',
         True,
     ),
     (
         "the same request, with observed evidence supplied",
         '''
-        import { generate } from "@/lib/core/ai";
-        const ev = evidenceBlock(indicator, platforms, proofPoints);
-        return generate({ tier: "fast", prompt: `${ev} Return JSON:
+        import { generate } from "@/lib/ai";
+        const ev = evidenceBlock(indicator, scanResults);
+        return generate({ prompt: `${ev} Return JSON:
           { "summary": "string", "points": [{ "text": "string", "source": "string" }] }`,
           parse: (v) => v });
         ''',
@@ -865,71 +799,68 @@ SELF_CHECK_CASES: list[tuple[str, str, bool]] = [
     (
         "code reading a score rather than asking for one",
         '''
-        import { generate } from "@/lib/core/ai";
-        const platforms = row.platforms;
+        import { generate } from "@/lib/ai";
         const out = { threatScore: row.score, verdict: row.verdict };
-        return generate({ tier: "fast", prompt: summarise(out), parse: (v) => v });
+        return generate({ prompt: summarise(out), parse: (v) => v });
         ''',
         False,
     ),
 ]
 
 
-# The v2 rules, each against the shape of the artefact it was written for and a
-# near miss it must leave alone: (name, path, source, rule expected or None).
+# The v2 rules, each against the shape it was written for and a near miss it
+# must leave alone: (name, path, source, rule expected or None).
 V2_SELF_CHECK_CASES: list[tuple[str, str, str, str | None]] = [
-    ("the global radar (#357)", "src/data/seed/globalThreatRadar.ts",
+    ("a verdict and actor written into seed data", "src/data/seed/radar.ts",
      "  { ioc: '185.220.101.5', reputation: 'Malicious', threatActor: 'APT28 (Fancy Bear)' },",
      "ui-verdict-literal"),
     ("a verdict type union", "src/components/x.tsx",
      "  verdict: 'Clean' | 'Malicious' | 'Suspicious';", None),
     ("an actor read from a result", "src/components/x.tsx",
      "  threatActor: result.threatActor,", None),
-    ("a documentation address served as a feed line (#359)", "src/app/api/feed/route.ts",
+    ("a documentation address served as a feed line", "src/app/api/feed/route.ts",
      "198.51.100.52 # score=88 seen=2026-09-25", "documentation-address"),
     ("a documentation IPv6 address", "src/components/x.tsx",
      "  { ip: '2001:db8:85a3::8a2e:370:7334' },", "documentation-address"),
-    ("a documentation range, not an address", "backend/shared/egress/egress.go",
+    ("a documentation range, not an address", "backend/net/guard.go",
      '\t\t"198.51.100.0/24",', None),
-    ("a documentation prefix in an exclusion list", "src/lib/intelligence/ioc-utils.ts",
+    ("a documentation prefix in an exclusion list", "src/lib/ioc.ts",
      '  "203.0.113.",', None),
     ("a documentation address as an input placeholder", "src/components/x.tsx",
      '  <input placeholder="e.g. 203.0.113.5" />', None),
     ("the empty-string SHA-256 as a sample", "src/data/seed/samples.ts",
      "  sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',",
      "empty-input-digest-as-sample"),
-    # #451: the C2 catalogue's own line, in the data file the classifier read.
-    ("the C2 catalogue's empty-body Cobalt Strike hash (#451)", "backend/ml-engine/data/c2_ground_truth.json",
+    ("an empty-body hash in a shipped signature catalogue", "backend/ml/data/catalogue.json",
      '        "http_body_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",',
      "empty-input-digest-as-sample"),
-    ("an all-zero JARM as a signature (#451)", "backend/ml-engine/data/c2.json",
+    ("an all-zero JARM as a signature", "backend/ml/data/c2.json",
      '  "jarm": "' + "0" * 62 + '",', "zero-jarm-as-fingerprint"),
-    ("an all-zero JARM in code", "backend/scanner-service/x.go",
+    ("an all-zero JARM in code", "backend/api/x.go",
      '\tsig := "' + "0" * 62 + '"', "zero-jarm-as-fingerprint"),
     ("a real JARM in data passes", "backend/x/data/fp.json",
      '  "jarm": "07d14d16d21d21d07c42d41d00041d24a458a375eef0c576d23a7bab9a9fb1",', None),
     ("ATT&CK prose in data passes", "src/data/seed/attack/enterprise-attack.json",
      '  "description": "APT29 is a threat group attributed to Russia",', None),
-    ("the ransomware radar's always-current victim (#357)", "src/components/hunt/RansomwareRadar.tsx",
+    ("an always-current record timestamp", "src/components/LeakTracker.tsx",
      "    claimedDate: new Date(Date.now() - 36 * 3600 * 1000).toISOString(),",
      "always-current-fake"),
     ("a query window computed from the clock", "src/components/x.tsx",
      "  const since = new Date(Date.now() - 30 * 86_400_000);", None),
-    ("the live attack stream (#357)", "src/data/seed/threatPulse.ts",
+    ("a sample array presented as a live stream", "src/data/seed/stream.ts",
      "export const SAMPLE_ATTACK_STREAM: LiveAttackEvent[] = [", "demo-named-data"),
-    ("a simulated result", "backend/sandbox/pipeline.go",
+    ("a simulated result", "backend/analysis/pipeline.go",
      "\tsimulatedVerdict := \"Malicious\"", "demo-named-data"),
-    ("the dashboard health tile's invented perimeter (#374)",
-     "src/components/dashboard/widgets/AssetHealthWidget.tsx",
+    ("an invented asset health row", "src/components/HealthTile.tsx",
      "    { domain: 'legacy-staging.org', ports: '80, 8080 (HTTP)', status: 'Attention Needed' },",
      "asserted-state"),
-    ("the browser raising a verdict (#360)", "src/lib/intelligence/ot-enrichment.ts",
+    ("a verdict raised outside the scoring module", "src/lib/enrich.ts",
      "      result.reputation = 'Malicious';", "score-outside-scoring"),
-    ("a score comparison is not an assignment", "src/lib/intelligence/x.ts",
+    ("a score comparison is not an assignment", "src/lib/x.ts",
      "  if (result.score === 0) return;", None),
-    ("the pipeline that owns the score", "backend/scanner-service/scoring.go",
+    ("the module that owns the score", "backend/api/scoring.go",
      "\tresult.Score = total", None),
-    ("the OT feed's fallback (#359)", "src/app/api/v1/cix/feeds/ot-attackers.txt/route.ts", '''
+    ("a feed that serves a canned list when upstream fails", "src/app/api/feed/route.ts", '''
 export async function GET(request) {
   try {
     const upstream = await fetch(url);
@@ -937,9 +868,9 @@ export async function GET(request) {
       return new NextResponse(await upstream.text(), { status: upstream.status });
     }
   } catch {
-    // Fall back to curated telemetry snapshot
+    // Fall back to curated snapshot
   }
-  const content = `# OT feed
+  const content = `# feed
 185.220.101.5 # score=95`;
   return new NextResponse(content, { status: 200 });
 }
@@ -954,27 +885,27 @@ export async function GET(request) {
     return NextResponse.json({ error: "The gateway did not answer." }, { status: 502 });
   }
 ''', None),
-    ("the attribution engine's keyword selector (#449)", "src/lib/intelligence/attribution-engine.ts", '''
-  const isVoltTyphoon = normalized.includes('45.142') || normalized.includes('cisco');
-  const actor = isVoltTyphoon ? CANONICAL_THREAT_ACTORS['volt-typhoon'] : CANONICAL_THREAT_ACTORS['apt29'];
+    ("an actor chosen by a substring of the indicator", "src/lib/attribution.ts", '''
+  const looksLikeGroupA = value.includes('cisco') || value.includes('vpn');
+  const actor = looksLikeGroupA ? ACTORS['group-a'] : ACTORS['group-b'];
 ''', "keyword-selected-attribution"),
-    ("the block resolver's substring C2 family (#449)", "src/lib/intelligence/block-evidence-resolver.ts", '''
+    ("a C2 family chosen by a substring", "src/lib/evidence.ts", '''
   } else if (clean.includes("brute") || clean.includes("badger")) {
     c2Family = "Brute Ratel C4";
 ''', "keyword-selected-attribution"),
-    ("the same shape in Go", "backend/scanner-service/x.go", '''
+    ("the same shape in Go", "backend/api/x.go", '''
 \tif strings.Contains(ioc, "cobalt") {
 \t\tactor = "APT41"
 ''', "keyword-selected-attribution"),
-    ("the worker's substring Sliver label (#470)", "backend/sandbox/worker/x.py", '''
+    ("a C2 label chosen by a byte substring in Python", "worker/x.py", '''
         if b"sliver" in carved_bytes.lower():
             c2_signatures.append("Sliver Implant Metadata")
 ''', "keyword-selected-attribution"),
-    ("the worker's substring Havoc label (#470)", "backend/sandbox/worker/x.py", '''
+    ("another byte-substring C2 label", "worker/x.py", '''
         if b"Demon" in carved_bytes:
             c2_signatures.append("Havoc C2 Demon Stager")
 ''', "keyword-selected-attribution"),
-    ("the worker's substring Cobalt Strike label (#470)", "backend/sandbox/worker/x.py", '''
+    ("a byte-substring label with two tests", "worker/x.py", '''
         if b"CobaltStrike" in carved_bytes or b"%s as %s\\%s: %d" in carved_bytes:
             c2_signatures.append("Cobalt Strike Beacon Config Block")
 ''', "keyword-selected-attribution"),
@@ -982,11 +913,11 @@ export async function GET(request) {
     if "cobalt" in banner:
         malware_family = "Cobalt Strike"
 ''', "keyword-selected-attribution"),
-    ("a Python substring test that picks no family", "backend/sandbox/worker/x.py", '''
+    ("a Python substring test that picks no family", "worker/x.py", '''
             if "write" in action or "create" in action:
                 files_created.append(path)
 ''', None),
-    ("the email mapping's substring-chosen domain technique (#466)", "src/lib/intelligence/cti-engine.ts", '''
+    ("an ATT&CK technique chosen by a domain substring", "src/lib/mapping.ts", '''
     const suspiciousDomains = iocs.domains.filter((d) =>
       d.includes("-security") || d.includes(".ru") || d.includes(".xyz")
     );
@@ -994,7 +925,7 @@ export async function GET(request) {
       techniques.push({
         id: "T1583.001",
 ''', "keyword-selected-attribution"),
-    ("the email mapping's keyword-list link technique (#466)", "src/lib/intelligence/cti-engine.ts", '''
+    ("an ATT&CK technique chosen by a keyword list", "src/lib/mapping.ts", '''
     const suspiciousUrls = urls.filter((u) => {
       const lower = u.toLowerCase();
       return phishingKeywords.some((kw) => lower.includes(kw));
@@ -1003,13 +934,13 @@ export async function GET(request) {
       techniques.push({
         id: "T1566.002",
 ''', "keyword-selected-attribution"),
-    ("a technique chosen from an observed flag", "src/lib/intelligence/cti-engine.ts", '''
+    ("a technique chosen from an observed flag", "src/lib/mapping.ts", '''
     const dangerous = attachments.filter((a) => a.hasMacroRisk);
     if (dangerous.length > 0) {
       techniques.push({
         id: "T1566.001",
 ''', None),
-    ("a substring test that picks no actor", "src/lib/intelligence/x.ts", '''
+    ("a substring test that picks no actor", "src/lib/x.ts", '''
   if (value.includes("://")) {
     kind = "url";
 ''', None),
@@ -1021,7 +952,7 @@ export async function GET(request) {
   }
   return NextResponse.json({ ok: true, application: app });
 ''', None),
-    # Generic Fake Functionality Test Cases:
+    # Generic fake functionality.
     ("a stub click handler", "src/components/Button.tsx",
      '  <button onClick={() => {}}>Save</button>', "stub-click-handler"),
     ("a valid click handler with logic", "src/components/Button.tsx",
@@ -1058,6 +989,7 @@ const onFormSubmit = (e) => {
 
 def self_check() -> int:
     """Prove each rule still fires. Returns a process exit code."""
+    apply_settings(SELF_CHECK_SETTINGS)
     failures = 0
     for name, source, should_flag in SELF_CHECK_CASES:
         lines = source.split("\n")
@@ -1075,8 +1007,15 @@ def self_check() -> int:
             print(f"  FAIL  expected to {want}: {name} (got {sorted(got) or 'nothing'})",
                   file=sys.stderr)
 
-    # A rule nothing reaches reports success (#185): prove a shipped data file
-    # is collected at all, not only that the rule fires once it is (#451).
+    # Score ownership is opt-in: with no owners configured the rule is silent.
+    apply_settings({})
+    if scan_text("src/lib/enrich.ts", ".ts", "      result.reputation = 'Malicious';"):
+        failures += 1
+        print("  FAIL  score-outside-scoring fired with no score_owners configured", file=sys.stderr)
+    apply_settings(SELF_CHECK_SETTINGS)
+
+    # A rule nothing reaches reports success: prove a shipped data file is
+    # collected at all, not only that the rule fires once it is.
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         data = Path(tmp) / "backend" / "svc" / "data" / "catalogue.json"
@@ -1089,15 +1028,15 @@ def self_check() -> int:
             failures += 1
             print("  FAIL  shipped data/*.json is not collected (or other .json is)", file=sys.stderr)
 
-    # Debt is a promise with a ticket on it; one without is an exemption by
-    # another name (#453).
-    for key, reason in KNOWN_DEBT.items():
-        if not DEBT_REF.match(reason):
+        # Settings are validated: debt must name an issue and cannot also be exempt.
+        bad = Path(tmp) / "fabrication.json"
+        bad.write_text(json.dumps({"known_debt": [{"path": "a.ts", "rule": "r", "reason": "no ticket"}]}))
+        try:
+            load_settings(str(bad))
             failures += 1
-            print(f"  FAIL  KNOWN_DEBT{key} names no issue: {reason!r}", file=sys.stderr)
-        if key in V2_EXEMPT:
-            failures += 1
-            print(f"  FAIL  KNOWN_DEBT{key} is also exempt; it is one or the other", file=sys.stderr)
+            print("  FAIL  known_debt without an issue reference was accepted", file=sys.stderr)
+        except SettingsError:
+            pass
 
     if failures:
         print(
@@ -1110,6 +1049,96 @@ def self_check() -> int:
 
     print(f"detector self-check: {len(SELF_CHECK_CASES) + len(V2_SELF_CHECK_CASES)} case(s) ok")
     return 0
+
+
+# --- project settings ------------------------------------------------------
+
+DEFAULT_SETTINGS_PATH = ".vigil/fabrication.json"
+SETTINGS_KEYS = {"exempt", "known_debt", "score_owners", "allowed_paths",
+                 "model_call_patterns", "evidence_markers"}
+
+
+class SettingsError(ValueError):
+    pass
+
+
+def _entries(raw: object, key: str) -> dict[tuple[str, str], str]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, list):
+        raise SettingsError(f"{key} must be a list")
+    out: dict[tuple[str, str], str] = {}
+    for item in raw:
+        if not isinstance(item, dict) or not all(
+            isinstance(item.get(k), str) and item.get(k).strip() for k in ("path", "rule", "reason")
+        ):
+            raise SettingsError(f"each {key} entry needs a non-empty path, rule and reason")
+        out[(item["path"], item["rule"])] = item["reason"]
+    return out
+
+
+def _strings(raw: object, key: str) -> list[str]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list) or not all(isinstance(x, str) and x for x in raw):
+        raise SettingsError(f"{key} must be a list of non-empty strings")
+    return raw
+
+
+def load_settings(path: str | None) -> dict:
+    """Read and validate a settings file. A missing default file is no settings;
+    a missing file named explicitly is an error."""
+    explicit = path is not None
+    p = Path(path or DEFAULT_SETTINGS_PATH)
+    if not p.is_file():
+        if explicit:
+            raise SettingsError(f"settings file not found: {p}")
+        return {}
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise SettingsError(f"{p}: invalid JSON: {e}") from e
+    if not isinstance(raw, dict):
+        raise SettingsError(f"{p}: expected a JSON object")
+    unknown = set(raw) - SETTINGS_KEYS
+    if unknown:
+        raise SettingsError(f"{p}: unknown key(s): {', '.join(sorted(unknown))}")
+    settings = {
+        "exempt": _entries(raw.get("exempt"), "exempt"),
+        "known_debt": _entries(raw.get("known_debt"), "known_debt"),
+        "score_owners": _strings(raw.get("score_owners"), "score_owners"),
+        "allowed_paths": _strings(raw.get("allowed_paths"), "allowed_paths"),
+        "model_call_patterns": _strings(raw.get("model_call_patterns"), "model_call_patterns"),
+        "evidence_markers": _strings(raw.get("evidence_markers"), "evidence_markers"),
+    }
+    for key, reason in settings["known_debt"].items():
+        if not DEBT_REF.match(reason):
+            raise SettingsError(f"known_debt {key} must start with an issue reference ('#123: why')")
+        if key in settings["exempt"]:
+            raise SettingsError(f"{key} is both exempt and known debt; it is one or the other")
+    for pattern in settings["model_call_patterns"] + settings["evidence_markers"]:
+        try:
+            re.compile(pattern)
+        except re.error as e:
+            raise SettingsError(f"invalid pattern {pattern!r}: {e}") from e
+    return settings
+
+
+def apply_settings(settings: dict) -> None:
+    """Install settings into the module's rule tables. Replaces, never merges,
+    so applying {} restores the defaults."""
+    global V2_EXEMPT, KNOWN_DEBT, SCORE_OWNERS, ALLOWED, MODEL_CALL, EVIDENCE_SUPPLIED
+    V2_EXEMPT = dict(settings.get("exempt", {}))
+    KNOWN_DEBT = dict(settings.get("known_debt", {}))
+    SCORE_OWNERS = tuple(settings.get("score_owners", ()))
+    ALLOWED = ALLOWED_DEFAULT + tuple(settings.get("allowed_paths", ()))
+    MODEL_CALL = re.compile(
+        "|".join([MODEL_CALL_DEFAULT, *settings.get("model_call_patterns", [])]),
+        re.IGNORECASE | re.MULTILINE,
+    )
+    EVIDENCE_SUPPLIED = re.compile(
+        "|".join([EVIDENCE_DEFAULT, *settings.get("evidence_markers", [])]), re.IGNORECASE
+    )
 
 
 def collect(paths: list[str]) -> list[Path]:
@@ -1146,15 +1175,30 @@ def main() -> int:
         return self_check()
 
     json_out = None
+    config_path = None
     clean_args = []
-    for a in args:
+    it = iter(args)
+    for a in it:
         if a.startswith("--json-out="):
             json_out = a.split("=", 1)[1]
         elif a == "--json-out":
-            pass
+            json_out = next(it, None)
+        elif a.startswith("--config="):
+            config_path = a.split("=", 1)[1]
+        elif a == "--config":
+            config_path = next(it, None)
+        elif a.startswith("--") and not a.startswith("--changed"):
+            print(f"unknown option: {a}", file=sys.stderr)
+            return 2
         else:
             clean_args.append(a)
     args = clean_args
+
+    try:
+        apply_settings(load_settings(config_path))
+    except SettingsError as e:
+        print(f"fabrication settings: {e}", file=sys.stderr)
+        return 2
 
     changed_arg = next((a for a in args if a.startswith("--changed")), None)
     if changed_arg:
@@ -1167,7 +1211,7 @@ def main() -> int:
                 Path(json_out).write_text("[]")
             return 0
     else:
-        targets = args or ["src", "backend"]
+        targets = args or [d for d in ("src", "backend") if Path(d).is_dir()] or ["."]
 
     files = collect(targets)
     findings: list[Finding] = []

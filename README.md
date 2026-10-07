@@ -144,14 +144,38 @@ Vigil includes a native MCP server for AI coding assistants (Claude Code, Cursor
 
 Run the self-contained headless API daemon:
 ```bash
-python3 engine/api/server.py --port 8080
+export VIGIL_API_TOKEN="$(openssl rand -hex 32)"   # omit to get a one-off token printed at startup
+export VIGIL_WORKSPACE_ROOT=/srv/repos              # scans may only run inside this directory
+python3 engine/api/server.py --port 8080            # binds 127.0.0.1 by default
 ```
 - **Interactive Swagger Documentation**: `http://localhost:8080/docs`
 - **OpenAPI 3.0 Specification**: `http://localhost:8080/openapi.json`
-- **Trigger Scan**: `POST /api/v1/scan` with `{"battery": "review", "workspace": "/path/to/code"}`
+- **Trigger Scan**: `POST /api/v1/scan` with `{"battery": "review", "workspace": "my-repo"}`
 - **Retrieve SARIF**: `GET /api/v1/scans/{scan_id}/sarif`
 - **Retrieve Markdown**: `GET /api/v1/scans/{scan_id}/report`
-- **Incoming Webhook**: `POST /api/v1/webhook` (compatible with GitHub and GitLab webhook events)
+- **Incoming Webhook**: `POST /api/v1/webhook` (GitHub and GitLab, signed — see below)
+
+Every request except `/api/v1/health`, `/docs` and `/openapi.json` needs
+`Authorization: Bearer $VIGIL_API_TOKEN`:
+
+```bash
+curl -s -X POST http://127.0.0.1:8080/api/v1/scan \
+  -H "Authorization: Bearer $VIGIL_API_TOKEN" -H "Content-Type: application/json" \
+  -d '{"battery": "fast", "workspace": "my-repo"}'
+```
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `VIGIL_API_TOKEN` | generated per run | Bearer token for scan and report routes. Required to bind anything but loopback. |
+| `--host` / `VIGIL_API_HOST` | `127.0.0.1` | Interface to listen on. |
+| `VIGIL_WORKSPACE_ROOT` | `/workspace`, else the current directory | A requested `workspace` must resolve inside it; symlinks out are refused. |
+| `VIGIL_WEBHOOK_SECRET` | unset (webhooks off) | GitHub: the webhook secret, checked against `X-Hub-Signature-256`. GitLab: the secret token, checked against `X-Gitlab-Token`. |
+| `VIGIL_DEFAULT_WORKSPACE` | `.` | Workspace a webhook scans, relative to the root. |
+| `VIGIL_API_MAX_SCANS` | `2` | Concurrent scans; more answer `429`. |
+
+Batteries are limited to `fast`, `quality`, `security`, `vapt`, `test`, `e2e`
+and `review`; requests must be `application/json` and at most 1 MiB. The API
+sends no CORS headers, so a web page cannot drive it from a browser.
 
 ---
 
@@ -215,4 +239,4 @@ Vigil enforces strict, non-negotiable exit codes:
 
 ## 9. License
 
-Apache License 2.0. Copyright (c) 2026 GuardianVigil Engineering.
+Apache License 2.0 — see [LICENSE](LICENSE). Security issues: see [SECURITY.md](SECURITY.md).

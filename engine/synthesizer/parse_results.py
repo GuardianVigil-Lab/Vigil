@@ -609,7 +609,7 @@ def parse_raw_results(raw_dir: Path) -> List[Finding]:
         summary_details = " | ".join(tail_lines) if tail_lines else "Verification failed"
         findings.append(
             Finding(
-                tool="sentinel-gate",
+                tool="vigil-gate",
                 rule_id=f"gate-failed-{gate_name}",
                 severity="P1",
                 message=f"Mandatory security/quality gate '{gate_name}' failed verification",
@@ -880,7 +880,7 @@ def generate_sarif(findings: List[Finding], output_path: Path) -> None:
             {
                 "tool": {
                     "driver": {
-                        "name": os.environ.get("VIGIL_PRODUCT_NAME", os.environ.get("SENTINEL_PRODUCT_NAME", "Vigil")),
+                        "name": os.environ.get("VIGIL_PRODUCT_NAME", "Vigil"),
                         "semanticVersion": "2.1.0",
                         "informationUri": "https://github.com/GuardianVigil-Lab/vigil",
                         "rules": list(rules_map.values()),
@@ -945,10 +945,10 @@ def generate_markdown(
         for f in advisory_findings[:30]:  # Cap to top 30
             rows.append(f"- **[{f.severity}]** `{f.file_path}:{f.line}` — {f.message} (`{f.rule_id}` via `{f.tool}`)")
         if len(advisory_findings) > 30:
-            rows.append(f"\n_... and {len(advisory_findings) - 30} more advisories (see reports/sentinel.sarif)_")
+            rows.append(f"\n_... and {len(advisory_findings) - 30} more advisories (see reports/vigil.sarif)_")
         adv_sec = "\n".join(rows)
 
-    default_template = """# Sentinel Security & Quality Audit Report
+    default_template = """# Vigil Security & Quality Audit Report
 
 **Status:** {VERDICT_BADGE}  
 **Date:** {GENERATED_AT}  
@@ -959,7 +959,7 @@ def generate_markdown(
 
 ## 1. Executive Summary
 
-Sentinel audited `{WORKSPACE_NAME}` across 6 engineering pillars (AST Linting, Junk Pruning, SAST/SCA Hardening, VAPT, QA Invariants, and Container Architecture).
+Vigil audited `{WORKSPACE_NAME}` across 6 engineering pillars (AST Linting, Junk Pruning, SAST/SCA Hardening, VAPT, QA Invariants, and Container Architecture).
 
 | Severity | Count | Blockers |
 | :--- | :--- | :--- |
@@ -992,16 +992,16 @@ Sentinel audited `{WORKSPACE_NAME}` across 6 engineering pillars (AST Linting, J
 
 ## 5. Audit Sign-off
 
-- **SARIF Specification:** SARIF 2.1.0 emitted to `reports/sentinel.sarif`
-- **Zero-Host Dependencies:** Verified in Sentinel container runtime
+- **SARIF Specification:** SARIF 2.1.0 emitted to `reports/vigil.sarif`
+- **Zero-Host Dependencies:** Verified in the Vigil container runtime
 - **Verdict:** {VERDICT_TEXT}
 """
 
     possible_templates = [
         template_path if template_path and template_path.exists() else None,
         Path(__file__).parent / "templates" / "review_template.md",
-        Path("/tools/sentinel/engine/synthesizer/templates/review_template.md"),
-        Path("/tools/sentinel/reporters/templates/review_template.md"),
+        Path("/tools/vigil/engine/synthesizer/templates/review_template.md"),
+        Path("/tools/vigil/reporters/templates/review_template.md"),
     ]
     template = ""
     for p in possible_templates:
@@ -1091,9 +1091,7 @@ def main() -> None:
 
     findings = parse_raw_results(raw_dir)
     generate_sarif(findings, reports_dir / "vigil.sarif")
-    generate_sarif(findings, reports_dir / "sentinel.sarif")
     generate_markdown(findings, template_path, reports_dir / "vigil-review.md")
-    generate_markdown(findings, template_path, reports_dir / "sentinel-review.md")
     print_ansi_table(findings)
 
     # Exit code: 1 if P0 or P1 finding present

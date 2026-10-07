@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Vigil: Portable POSIX Host Runner & Security CLI
-# Consumes ghcr.io/guardianvigil-lab/vigil:latest (or local fallback guardianvigil-vigil:local)
+# Consumes ghcr.io/guardianvigil-lab/vigil:latest (or local fallback vigil:local)
 #
 # Usage:
 #   vigil [fast | quality | security | vapt | test | e2e | review]
@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-IMAGE_NAME="${VIGIL_IMAGE:-${SENTINEL_IMAGE:-ghcr.io/guardianvigil-lab/vigil:latest}}"
-LOCAL_IMAGE="guardianvigil-vigil:local"
+IMAGE_NAME="${VIGIL_IMAGE:-ghcr.io/guardianvigil-lab/vigil:latest}"
+LOCAL_IMAGE="vigil:local"
 VIGIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_WORKSPACE="$(pwd)"
 
@@ -54,8 +54,6 @@ SELECTED_IMAGE="${IMAGE_NAME}"
 if ! docker image inspect "${SELECTED_IMAGE}" >/dev/null 2>&1; then
   if docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1; then
     SELECTED_IMAGE="${LOCAL_IMAGE}"
-  elif docker image inspect "guardianvigil-sentinel:local" >/dev/null 2>&1; then
-    SELECTED_IMAGE="guardianvigil-sentinel:local"
   elif [ -f "${VIGIL_DIR}/Dockerfile" ]; then
     echo "Image '${SELECTED_IMAGE}' not found locally. Building from ${VIGIL_DIR}/Dockerfile..."
     docker build -t "${LOCAL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"

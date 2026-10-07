@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Sentinel Fast Developer Ratchet (< 15s)
+# Vigil Fast Developer Ratchet (< 15s)
 # Focuses on high-speed pre-commit & PR gates:
 # 1. AST Linting & Action Guards
 # 2. Gitleaks fast commit/tree secrets scan
@@ -14,8 +14,6 @@ if [ -z "${TOOL_ROOT:-}" ]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   if [ -d "/tools/vigil" ]; then
     TOOL_ROOT="/tools/vigil"
-  elif [ -d "/tools/sentinel" ]; then
-    TOOL_ROOT="/tools/sentinel"
   else
     TOOL_ROOT="${SCRIPT_DIR}"
   fi

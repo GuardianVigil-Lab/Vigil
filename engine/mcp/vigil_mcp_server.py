@@ -304,12 +304,8 @@ def vigil_review(workspace_path: str = ".", base_branch: str = "main", post_comm
         results["summary"] = out.strip()
 
     sarif_file = ws / "reports" / "vigil.sarif"
-    if not sarif_file.exists():
-        sarif_file = ws / "reports" / "sentinel.sarif"
 
     review_file = ws / "reports" / "vigil-review.md"
-    if not review_file.exists():
-        review_file = ws / "reports" / "sentinel-review.md"
 
     results["sarif_report"] = str(sarif_file) if sarif_file.exists() else None
     results["markdown_report"] = str(review_file) if review_file.exists() else None

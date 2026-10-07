@@ -43,7 +43,7 @@ $ErrorActionPreference = "Stop"
 
 $VigilDir = Split-Path -Parent $PSScriptRoot
 $WorkspaceDir = Get-Location
-$LocalImage = "guardianvigil-vigil:local"
+$LocalImage = "vigil:local"
 $ReportsDir = Join-Path $WorkspaceDir "reports"
 
 if (-not (Test-Path $ReportsDir)) {

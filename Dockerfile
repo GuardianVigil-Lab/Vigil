@@ -204,11 +204,10 @@ ENV GOPATH=/home/vigil/go
 ENV GOCACHE=/home/vigil/.cache/go-build
 ENV PATH="/usr/local/go/bin:/home/vigil/go/bin:/go/bin:/usr/local/bin:$PATH"
 
-# Create writable directories and dedicated non-root vigil user (with sentinel aliases)
+# Create writable directories and dedicated non-root vigil user
 RUN groupadd -g 1000 vigilgroup 2>/dev/null || true && \
     useradd -u 1000 -g 1000 -d /home/vigil -s /bin/bash vigiluser 2>/dev/null || true && \
     mkdir -p /home/vigil/.cache/go-build /home/vigil/go /workspace /tools/vigil /go && \
-    ln -s /home/vigil /home/sentinel && \
     chown -R 1000:1000 /home/vigil && \
     chmod -R 777 /home/vigil && \
     chmod -R 777 /go && \
@@ -216,12 +215,9 @@ RUN groupadd -g 1000 vigilgroup 2>/dev/null || true && \
 
 # Copy Vigil internals
 COPY . /tools/vigil/
-RUN ln -s /tools/vigil /tools/sentinel && \
-    chmod +x /tools/vigil/vigil.sh \
-             /tools/vigil/sentinel.sh \
+RUN chmod +x /tools/vigil/vigil.sh \
              /tools/vigil/entrypoint.sh \
              /tools/vigil/bin/vigil \
-             /tools/vigil/bin/sentinel \
              /tools/vigil/runners/*.sh \
              /tools/vigil/engine/vapt/*.sh \
              /tools/vigil/engine/code_review/*.sh \

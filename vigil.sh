@@ -6,12 +6,10 @@
 
 set -uo pipefail
 
-# Detect tool root dynamically (supports /tools/vigil, /tools/sentinel, or local execution)
+# Detect tool root dynamically (supports /tools/vigil or local execution)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ -d "/tools/vigil" ]; then
   TOOL_ROOT="/tools/vigil"
-elif [ -d "/tools/sentinel" ]; then
-  TOOL_ROOT="/tools/sentinel"
 else
   TOOL_ROOT="${SCRIPT_DIR}"
 fi

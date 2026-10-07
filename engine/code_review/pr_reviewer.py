@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sentinel Semantic PR Reviewer (CodeRabbit Alternative)
+"""Vigil Semantic PR Reviewer (CodeRabbit Alternative)
 
 Analyzes git diffs for:
 - Missing tenant isolation & BOLA vectors
@@ -158,7 +158,7 @@ def analyze_diff(hunks: List[Dict[str, Any]]) -> List[PRComment]:
                     line=line_no,
                     severity="P0",
                     title="Hardcoded Credential in Code",
-                    message="Detected high-entropy hardcoded secret or token assignment in added code. Move this credential to environment variables / Infisical Vault.",
+                    message="Detected high-entropy hardcoded secret or token assignment in added code. Move this credential to an environment variable or a secrets manager.",
                     suggestion="const apiKey = process.env.API_KEY;",
                 )
             )
@@ -246,7 +246,7 @@ def main() -> int:
     )
 
     # Write Markdown summary
-    md_lines = ["# Sentinel Semantic PR Review (CodeRabbit Alternative)\n"]
+    md_lines = ["# Vigil Semantic PR Review (CodeRabbit Alternative)\n"]
     if comments:
         md_lines.append(f"Found **{len(comments)}** potential code improvement(s) in this pull request.\n")
         for c in comments:

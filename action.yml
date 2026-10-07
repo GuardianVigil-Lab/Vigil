@@ -1,6 +1,6 @@
 name: 'Vigil Security & Quality Action'
 description: 'All-in-one Deep VAPT, Code Quality, Automated PR Review & Anti-Fabrication Security Engine'
-author: 'GuardianVigil Engineering'
+author: 'GuardianVigil-Lab'
 branding:
   icon: 'shield'
   color: 'blue'

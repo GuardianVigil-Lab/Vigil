@@ -8,8 +8,6 @@ if [ -z "${TOOL_ROOT:-}" ]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   if [ -d "/tools/vigil" ]; then
     TOOL_ROOT="/tools/vigil"
-  elif [ -d "/tools/sentinel" ]; then
-    TOOL_ROOT="/tools/sentinel"
   else
     TOOL_ROOT="${SCRIPT_DIR}"
   fi
