@@ -42,7 +42,8 @@ class ApiTest(unittest.TestCase):
             cls.started.append((battery, workspace, target_url))
             cls.block.wait(5)
             with server.SCANS_LOCK:
-                server.SCANS[scan_id]["status"] = "completed"
+                if scan_id in server.SCANS:
+                    server.SCANS[scan_id]["status"] = "completed"
 
         server._real_worker = server.execute_scan_worker
         server.execute_scan_worker = fake_worker

@@ -24,10 +24,10 @@
 param (
     [Parameter(Position = 0)]
     [ValidateSet("fast", "quality", "security", "vapt", "test", "e2e", "review", "all")]
-    [string]$Battery = "review",
+    [string]$Battery = "fast",
 
     [Parameter()]
-    [string]$Image = $(if ($env:VIGIL_IMAGE) { $env:VIGIL_IMAGE } else { "ghcr.io/guardianvigil-lab/vigil:latest" }),
+    [string]$Image = $env:VIGIL_IMAGE,
 
     [Parameter()]
     [string]$TargetUrl = "http://127.0.0.1:3000",
@@ -36,14 +36,21 @@ param (
     [switch]$Shell,
 
     [Parameter()]
-    [switch]$Build
+    [switch]$Build,
+
+    [Parameter()]
+    [ValidateSet("core", "full", "all")]
+    [string]$Target = "core"
 )
 
 $ErrorActionPreference = "Stop"
 
-$VigilDir = Split-Path -Parent $PSScriptRoot
+$VigilDir = if ($env:VIGIL_DIR -and (Test-Path "$env:VIGIL_DIR\vigil.sh")) { $env:VIGIL_DIR } elseif (Test-Path "$PSScriptRoot\..\vigil.sh") { (Split-Path -Parent $PSScriptRoot) } elseif (Test-Path ".\vigil.sh") { (Get-Location).Path } else { (Split-Path -Parent $PSScriptRoot) }
 $WorkspaceDir = Get-Location
-$LocalImage = "vigil:local"
+$CoreImage = if ($env:VIGIL_CORE_IMAGE) { $env:VIGIL_CORE_IMAGE } else { "ghcr.io/guardianvigil-lab/vigil:core" }
+$FullImage = if ($env:VIGIL_FULL_IMAGE) { $env:VIGIL_FULL_IMAGE } else { "ghcr.io/guardianvigil-lab/vigil:latest" }
+$LocalCoreImage = "vigil:core"
+$LocalFullImage = "vigil:local"
 $ReportsDir = Join-Path $WorkspaceDir "reports"
 
 if (-not (Test-Path $ReportsDir)) {
@@ -52,8 +59,29 @@ if (-not (Test-Path $ReportsDir)) {
 
 # Handle --build
 if ($Build) {
-    Write-Host "[Vigil] Building container image ($LocalImage)..." -ForegroundColor Cyan
-    docker build -t $LocalImage -f "$VigilDir\Dockerfile" $VigilDir
+    $DockerfilePath = Join-Path $VigilDir "Dockerfile"
+    $BuildContext = $VigilDir
+    if (-not (Test-Path $DockerfilePath)) {
+        if (Test-Path ".\Dockerfile") {
+            $DockerfilePath = ".\Dockerfile"
+            $BuildContext = "."
+        } else {
+            Write-Error "[Vigil ERROR] Dockerfile not found at '$DockerfilePath'. Building requires the Vigil source repository."
+            exit 1
+        }
+    }
+
+    if ($Target -eq "core") {
+        Write-Host "[Vigil] Building Core container image ($LocalCoreImage)..." -ForegroundColor Cyan
+        docker build --target core -t $LocalCoreImage -f $DockerfilePath $BuildContext
+    } elseif ($Target -eq "full") {
+        Write-Host "[Vigil] Building Full container image ($LocalFullImage)..." -ForegroundColor Cyan
+        docker build --target full -t $LocalFullImage -f $DockerfilePath $BuildContext
+    } else {
+        Write-Host "[Vigil] Building Core & Full container images..." -ForegroundColor Cyan
+        docker build --target core -t $LocalCoreImage -f $DockerfilePath $BuildContext
+        docker build --target full -t $LocalFullImage -f $DockerfilePath $BuildContext
+    }
     exit $LASTEXITCODE
 }
 
@@ -69,13 +97,23 @@ try {
     exit 1
 }
 
-# Image resolution
-$SelectedImage = $Image
+# Smart Tier Image Resolution
+if ($Image) {
+    $SelectedImage = $Image
+    $FallbackLocal = ""
+} elseif ($Battery -in @("vapt", "test", "e2e", "review", "all")) {
+    $SelectedImage = $FullImage
+    $FallbackLocal = $LocalFullImage
+} else {
+    $SelectedImage = $CoreImage
+    $FallbackLocal = $LocalCoreImage
+}
+
 $imageCheck = docker image inspect $SelectedImage 2>&1
 if ($LASTEXITCODE -ne 0) {
-    $localCheck = docker image inspect $LocalImage 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        $SelectedImage = $LocalImage
+    $localCheck = if ($FallbackLocal) { docker image inspect $FallbackLocal 2>&1 } else { "" }
+    if ($FallbackLocal -and $LASTEXITCODE -eq 0) {
+        $SelectedImage = $FallbackLocal
     } else {
         Write-Host "[Vigil] Pulling $SelectedImage..." -ForegroundColor Yellow
         docker pull $SelectedImage

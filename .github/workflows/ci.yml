@@ -54,10 +54,11 @@ jobs:
             bash -n "$script"
           done
 
-      - name: Test Universal 1-Command Installer
+      - name: Test Universal 1-Command Installer & Standalone Mode
         run: |
           INSTALL_DIR=/tmp/test_ci_bin ./install.sh
           /tmp/test_ci_bin/vigil --help
+          /tmp/test_ci_bin/vigil --standalone fast
           rm -rf /tmp/test_ci_bin
 
       - name: Validate Configuration Schemas
@@ -72,4 +73,4 @@ jobs:
         run: |
           docker build --target core -t vigil:core -f Dockerfile .
           docker run --rm vigil:core /tools/vigil/bin/vigil --help
-          docker run --rm -v "${PWD}:/workspace" vigil:core fast || true
+          docker run --rm -v "${PWD}:/workspace" vigil:core fast
