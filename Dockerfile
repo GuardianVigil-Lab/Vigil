@@ -92,7 +92,33 @@ RUN curl -fsSL https://github.com/phpstan/phpstan/releases/latest/download/phpst
 
 
 # ==============================================================================
-# Stage 2: Runtime Environment
+# Stage 2: Go Tools Builder (Native cross-compilation via $BUILDPLATFORM)
+# ==============================================================================
+FROM --platform=$BUILDPLATFORM golang:1.27 AS go-builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV CGO_ENABLED=0
+ENV GOOS=${TARGETOS:-linux}
+ENV GOARCH=${TARGETARCH}
+
+RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 && \
+    go install golang.org/x/vuln/cmd/govulncheck@latest && \
+    go install github.com/securego/gosec/v2/cmd/gosec@latest && \
+    go install golang.org/x/tools/cmd/deadcode@latest && \
+    go install go.uber.org/nilaway/cmd/nilaway@latest && \
+    go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest && \
+    mkdir -p /out/bin && \
+    if [ -d "/go/bin/${GOOS}_${GOARCH}" ]; then \
+        cp /go/bin/${GOOS}_${GOARCH}/* /out/bin/; \
+    else \
+        cp /go/bin/* /out/bin/; \
+    fi
+
+
+# ==============================================================================
+# Stage 3: Runtime Environment
 # ==============================================================================
 FROM debian:bookworm-slim
 
@@ -146,8 +172,9 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
 ENV PATH="/usr/local/go/bin:/go/bin:/usr/local/bin:$PATH"
 ENV GOPATH="/go"
 
-# Copy pre-compiled binaries, PHARs, testssl, nikto from extractor
+# Copy pre-compiled binaries, PHARs, testssl, nikto from extractor and go-builder
 COPY --from=extractor /out/bin/* /usr/local/bin/
+COPY --from=go-builder /out/bin/* /usr/local/bin/
 RUN mkdir -p /usr/local/share/php /usr/local/share/testssl /usr/local/share/nikto
 COPY --from=extractor /out/phars/* /usr/local/share/php/
 COPY --from=extractor /out/testssl /usr/local/share/testssl/
@@ -181,15 +208,6 @@ RUN npm install -g --no-audit --no-fund \
 # Set up Playwright binary directory and permissions
 RUN mkdir -p /ms-playwright && \
     chmod -R 777 /ms-playwright
-
-# Install Go analysis tools
-RUN GOBIN=/usr/local/bin go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 && \
-    GOBIN=/usr/local/bin go install golang.org/x/vuln/cmd/govulncheck@latest && \
-    GOBIN=/usr/local/bin go install github.com/securego/gosec/v2/cmd/gosec@latest && \
-    GOBIN=/usr/local/bin go install golang.org/x/tools/cmd/deadcode@latest && \
-    GOBIN=/usr/local/bin go install go.uber.org/nilaway/cmd/nilaway@latest && \
-    GOBIN=/usr/local/bin go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest && \
-    rm -rf /root/.cache/go-build /go/pkg
 
 # Install Python tools
 RUN python3 -m pip install --break-system-packages --no-cache-dir \

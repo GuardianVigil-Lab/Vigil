@@ -38,11 +38,15 @@ Vigil solves this via **Host Workspace Path Translation**:
   - Multi-arch binary extraction supporting both `linux/amd64` and `linux/arm64` via dynamically mapped architecture tags.
   - Fetches pre-compiled static binaries: Hadolint, Zizmor, Gitleaks, TruffleHog, Syft, Grype, Trivy, Ast-Grep, Squawk (v2.67.0+ with native ARM64 support), Nuclei, Ffuf, Oasdiff, Dockle, Toxiproxy, Reviewdog, Strix (v1.7.0), Nikto, testssl.sh, and PHAR archives.
   - Ensures clean separation of build-time fetch dependencies from the final minimal image.
-- **Stage 2 (Runtime)**:
+- **Stage 2 (Go Tools Builder)**:
+  - Native cross-compilation builder running on `--platform=$BUILDPLATFORM golang:1.27`.
+  - Compiles Go analysis tools (`golangci-lint`, `govulncheck`, `gosec`, `deadcode`, `nilaway`, `avito-tech/go-mutesting`) using `CGO_ENABLED=0` directly targeting `TARGETARCH`.
+  - Eliminates QEMU CPU emulation overhead during Go compilation, avoids runtime segfaults, and prevents ARM64 Linux `syscall.Dup2` incompatibility in Go AST mutation dependencies.
+- **Stage 3 (Runtime)**:
   - Base: Debian Bookworm Slim with minimal glibc, curl, git, python3-dev, build-essential.
   - Node.js 26.x + Go 1.27.1 multi-arch runtime (packaged with `libatomic1` for ARM64 V8 memory consistency).
   - Playwright Chromium headless engine and fonts (`/ms-playwright`).
-  - Analysis tools: `golangci-lint`, `govulncheck`, `gosec`, `deadcode`, `nilaway`, `go-mutesting` (actively maintained `avito-tech/go-mutesting` fork with Go 1.27+ and Linux ARM64 support), `ruff`, `vulture`, `schemathesis`, `semgrep`, `oxlint`, `knip`, `jscpd`.
+  - Analysis tools: pre-compiled static Go binaries copied from Stage 2 (`golangci-lint`, `govulncheck`, `gosec`, `deadcode`, `nilaway`, `go-mutesting`), plus `ruff`, `vulture`, `schemathesis`, `semgrep`, `oxlint`, `knip`, `jscpd`.
   - Drops root privileges via `gosu` in `entrypoint.sh`.
 
 ---
