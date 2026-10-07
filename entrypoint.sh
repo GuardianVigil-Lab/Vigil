@@ -47,6 +47,8 @@ if [ "$(id -u)" -eq 0 ]; then
     exec gosu vigiluser "${RUNNER}" review
   elif [ "$1" = "fast" ] || [ "$1" = "quality" ] || [ "$1" = "security" ] || [ "$1" = "vapt" ] || [ "$1" = "test" ] || [ "$1" = "e2e" ] || [ "$1" = "review" ] || [ "$1" = "all" ]; then
     exec gosu vigiluser "${RUNNER}" "$@"
+  elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+    exec gosu vigiluser /tools/vigil/bin/vigil --help
   else
     exec gosu vigiluser "$@"
   fi
@@ -61,6 +63,8 @@ if [ "$#" -eq 0 ]; then
   exec "${RUNNER}" review
 elif [ "$1" = "fast" ] || [ "$1" = "quality" ] || [ "$1" = "security" ] || [ "$1" = "vapt" ] || [ "$1" = "test" ] || [ "$1" = "e2e" ] || [ "$1" = "review" ] || [ "$1" = "all" ]; then
   exec "${RUNNER}" "$@"
+elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+  exec /tools/vigil/bin/vigil --help
 else
   exec "$@"
 fi
