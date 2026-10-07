@@ -20,6 +20,15 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # The image (Chromium, PHP, Go toolchain and tools, two architectures)
+      # is larger than a stock runner's free space comfortably holds. Remove
+      # SDKs this job never uses.
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af >/dev/null
+          df -h /
+
       - name: Set up QEMU (Multi-Arch)
         uses: docker/setup-qemu-action@v3
 
@@ -55,3 +64,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Job logs are not always to hand; an annotation is. Report what the
+      # runner had left so a failure can be told from a full disk.
+      - name: Report runner state on failure
+        if: failure()
+        run: |
+          echo "::error title=Runner disk after build::$(df -h / | tail -1 | tr -s ' ')"
+          echo "::error title=Buildx cache::$(docker buildx du 2>/dev/null | tail -1 | tr -s ' ')"
