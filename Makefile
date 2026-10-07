@@ -1,6 +1,6 @@
 # Vigil — Build & Orchestration Makefile
 
-IMAGE_NAME ?= guardianvigil-vigil:local
+IMAGE_NAME ?= vigil:local
 GHCR_IMAGE ?= ghcr.io/guardianvigil-lab/vigil:latest
 
 .PHONY: help build test lint run shell clean publish
@@ -19,6 +19,7 @@ build:
 
 test:
 	python3 engine/anti_fabrication/detector.py --self-check
+	python3 -m unittest discover -s tests
 	python3 -m py_compile engine/vapt/*.py engine/code_review/*.py engine/synthesizer/*.py
 
 lint:

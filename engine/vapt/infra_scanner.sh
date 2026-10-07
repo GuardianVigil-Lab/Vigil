@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Sentinel Infrastructure & Transport Security Auditor (Nessus-Equivalent)
+# Vigil Infrastructure & Transport Security Auditor (Nessus-Equivalent)
 # Orchestrates nmap (service & NSE vuln scan), testssl.sh (ciphers & TLS), and nikto (web server).
 #
 

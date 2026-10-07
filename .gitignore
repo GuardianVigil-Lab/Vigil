@@ -1,4 +1,4 @@
-# Sentinel gitignore
+# Vigil gitignore
 reports/
 .cache/
 node_modules/

@@ -233,7 +233,7 @@ def parse_bandit(raw_dir: str) -> List[Finding]:
 
 Before opening a pull request with a new tool:
 
-1. [ ] Rebuild the image: `docker build -t guardianvigil-vigil:local .`
+1. [ ] Rebuild the image: `docker build -t vigil:local .`
 2. [ ] Test the runner battery: `./bin/vigil <battery>`
 3. [ ] Confirm output appears in `reports/vigil-review.md` and `reports/vigil.sarif`.
 4. [ ] Ensure non-root user permissions work: `USER 1000:1000` must not throw permission denied errors.

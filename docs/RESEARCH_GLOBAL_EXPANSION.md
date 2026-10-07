@@ -78,7 +78,7 @@ Vigil normalizes all scanner findings into a single unified SARIF 2.1.0 output w
 
 ### 4. HIPAA Security Rule (45 CFR Part 160 and Part 164, Subparts A and C)
 - **§ 164.312(a)(1) (Access Controls)**:
-  - *Vigil Enforcements*: Strict tenant isolation and assertOperator AST rules.
+  - *Vigil Enforcements*: Tenant-isolation checks and the server-action authorization AST rule.
 - **§ 164.312(b) (Audit Controls)**:
   - *Vigil Enforcements*: Fail-closed audit logging invariants ensuring all database operations emit structured audit records.
 - **§ 164.312(e)(1) (Transmission Security)**:
@@ -150,9 +150,8 @@ To allow seamless consumption by modern AI agents and enterprise CI/CD pipelines
 ## 5. Implementation Roadmap
 
 1. **Sprint 1 (Current Milestone)**:
-   - Full Sentinel -> Vigil rebranding and zero-host container release (`ghcr.io/guardianvigil-lab/vigil:latest`).
+   - Zero-host container release (`ghcr.io/guardianvigil-lab/vigil:latest`).
    - Native MCP Server and REST API daemon with OpenAPI docs.
-   - Comprehensive documentation push to Gemini Notebook with tagged multi-project retrieval.
 
 2. **Sprint 2 (Q4 2026)**:
    - Packaging Python (`bandit`, `pip-audit`) and Java (`SpotBugs`) container layers.

@@ -10,8 +10,6 @@ if [ -z "${TOOL_ROOT:-}" ]; then
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   if [ -d "/tools/vigil" ]; then
     TOOL_ROOT="/tools/vigil"
-  elif [ -d "/tools/sentinel" ]; then
-    TOOL_ROOT="/tools/sentinel"
   else
     TOOL_ROOT="${SCRIPT_DIR}"
   fi
@@ -46,8 +44,8 @@ if [ -n "${SG_BIN}" ]; then
     [ -f "${TOOL_ROOT}/configs/ast-grep/rules/db-pool-isolation.yml" ] && ACTIVE_RULES+=("${TOOL_ROOT}/configs/ast-grep/rules/db-pool-isolation.yml")
   fi
 
-  # Project-specific custom AST rules (.vigil/rules/*.yml or .sentinel/rules/*.yml)
-  for rdir in .vigil/rules .sentinel/rules; do
+  # Project-specific custom AST rules (.vigil/rules/*.yml)
+  for rdir in .vigil/rules; do
     if [ -d "${rdir}" ]; then
       for custom_rule in "${rdir}"/*.yml "${rdir}"/*.yaml; do
         if [ -f "${custom_rule}" ]; then
@@ -114,7 +112,7 @@ if command -v oxlint >/dev/null 2>&1 && [ -f "package.json" ]; then
 fi
 
 # 6. Custom repository audit hooks and scripts
-for hdir in .vigil/hooks .sentinel/hooks; do
+for hdir in .vigil/hooks; do
   if [ -d "${hdir}" ]; then
     for hook in "${hdir}"/*.sh "${hdir}"/*.py; do
       if [ -f "${hook}" ]; then

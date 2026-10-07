@@ -15,8 +15,8 @@ if [ "$(id -u)" -eq 0 ]; then
     WORKSPACE_UID=1000
     WORKSPACE_GID=1000
   fi
-  VIGIL_UID="${VIGIL_UID:-${SENTINEL_UID:-$WORKSPACE_UID}}"
-  VIGIL_GID="${VIGIL_GID:-${SENTINEL_GID:-$WORKSPACE_GID}}"
+  VIGIL_UID="${VIGIL_UID:-$WORKSPACE_UID}"
+  VIGIL_GID="${VIGIL_GID:-$WORKSPACE_GID}"
 
   if ! getent group "${VIGIL_GID}" >/dev/null 2>&1; then
     groupmod -g "${VIGIL_GID}" vigilgroup 2>/dev/null || groupadd -g "${VIGIL_GID}" vigilgroup 2>/dev/null || true
@@ -42,9 +42,6 @@ if [ "$(id -u)" -eq 0 ]; then
   chown -R "${VIGIL_UID}:${VIGIL_GID}" /workspace/reports 2>/dev/null || true
 
   RUNNER="/tools/vigil/vigil.sh"
-  if [ ! -f "${RUNNER}" ] && [ -f "/tools/sentinel/sentinel.sh" ]; then
-    RUNNER="/tools/sentinel/sentinel.sh"
-  fi
 
   if [ "$#" -eq 0 ]; then
     exec gosu vigiluser "${RUNNER}" review
@@ -59,9 +56,6 @@ fi
 mkdir -p /workspace/reports 2>/dev/null || true
 
 RUNNER="/tools/vigil/vigil.sh"
-if [ ! -f "${RUNNER}" ] && [ -f "/tools/sentinel/sentinel.sh" ]; then
-  RUNNER="/tools/sentinel/sentinel.sh"
-fi
 
 if [ "$#" -eq 0 ]; then
   exec "${RUNNER}" review

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Sentinel Strix VAPT Orchestrator
+"""Vigil Strix VAPT Orchestrator
 
 Executes Strix autonomous penetration testing engine against running web targets
 or OpenAPI schemas. Supports:
-  1. Docker-outside-of-Docker (DooD) host path translation via SENTINEL_HOST_WORKSPACE.
+  1. Docker-outside-of-Docker (DooD) host path translation via VIGIL_HOST_WORKSPACE.
   2. Local self-hosted BYO-LLM mode (STRIX_LLM_API_KEY, STRIX_MODEL).
   3. Managed Strix Cloud API mode (STRIX_CLOUD_API_KEY, STRIX_CLOUD_ENDPOINT).
   4. Exploit extraction: converts confirmed vulnerabilities into reproducible curl snippets.
@@ -55,7 +55,7 @@ class StrixExploit:
 
 def resolve_dood_path(container_path: str) -> str:
     """Translates container workspace path to host workspace path for DooD containers."""
-    host_workspace = os.environ.get("VIGIL_HOST_WORKSPACE") or os.environ.get("SENTINEL_HOST_WORKSPACE")
+    host_workspace = os.environ.get("VIGIL_HOST_WORKSPACE")
     if not host_workspace:
         return container_path
     c_path = Path(container_path).resolve()
@@ -68,7 +68,7 @@ def resolve_dood_path(container_path: str) -> str:
 def check_target_alive(url: str, timeout: int = 3) -> bool:
     try:
         import urllib.request
-        req = urllib.request.Request(url, headers={"User-Agent": "Sentinel-VAPT/2.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Vigil-VAPT/2.0"})
         with urllib.request.urlopen(req, timeout=timeout) as res:
             return res.status in (200, 201, 204, 301, 302, 401, 403)
     except Exception:
@@ -87,7 +87,7 @@ def run_strix_cloud(
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "User-Agent": "Sentinel-Audit-Engine/2.0",
+        "User-Agent": "Vigil-Audit-Engine/2.0",
     }
     payload = {
         "target_url": target_url,
@@ -162,8 +162,8 @@ def run_strix_cli(
 
     # Propagate DooD workspace and LLM credentials
     env = os.environ.copy()
-    if "SENTINEL_HOST_WORKSPACE" in env:
-        env["STRIX_HOST_WORKSPACE"] = env["SENTINEL_HOST_WORKSPACE"]
+    if "VIGIL_HOST_WORKSPACE" in env:
+        env["STRIX_HOST_WORKSPACE"] = env["VIGIL_HOST_WORKSPACE"]
     if "STRIX_LLM_API_KEY" in env:
         # If user provided STRIX_LLM_API_KEY, map to OPENAI_API_KEY if unset
         if "OPENAI_API_KEY" not in env:

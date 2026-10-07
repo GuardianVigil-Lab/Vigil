@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Sentinel Reviewdog Integration Wrapper
-# Translates Sentinel PR Review & Anti-Fabrication JSON findings into RDJSON format
+# Vigil Reviewdog Integration Wrapper
+# Translates Vigil PR Review & Anti-Fabrication JSON findings into RDJSON format
 # and posts inline GitHub Pull Request review annotations without failing on pre-existing code.
 #
 
@@ -17,7 +17,7 @@ if [ ! -f "${PR_JSON}" ]; then
   exit 0
 fi
 
-# Convert Sentinel JSON to Reviewdog Diagnostic Format (RDJSON)
+# Convert Vigil JSON to Reviewdog Diagnostic Format (RDJSON)
 python3 -c "
 import json, sys
 
@@ -61,7 +61,7 @@ if command -v reviewdog >/dev/null 2>&1; then
   echo "  Posting inline annotations via reviewdog..."
   if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${CI:-}" ]; then
     export REVIEWDOG_GITHUB_API_TOKEN="${GITHUB_TOKEN}"
-    reviewdog -f=rdjson -name="Sentinel Review" -reporter=github-pr-review < "${RDJSON_FILE}" || true
+    reviewdog -f=rdjson -name="Vigil Review" -reporter=github-pr-review < "${RDJSON_FILE}" || true
   else
     echo "  (Running locally / outside CI; printing Reviewdog diff annotations to console)"
     DIFF_CMD="git diff origin/main...HEAD 2>/dev/null || git diff HEAD"

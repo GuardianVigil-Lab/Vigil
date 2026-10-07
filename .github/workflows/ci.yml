@@ -30,6 +30,10 @@ jobs:
         run: |
           python3 engine/anti_fabrication/detector.py --self-check
 
+      - name: Unit Tests (REST API & Detector Settings)
+        run: |
+          python3 -m unittest discover -s tests -v
+
       - name: Validate Python Syntax across Engines, MCP & API
         run: |
           python3 -m py_compile engine/anti_fabrication/*.py
@@ -41,11 +45,9 @@ jobs:
 
       - name: Validate Shell Script Execution Bits & Syntax
         run: |
-          chmod +x bin/vigil bin/sentinel vigil.sh sentinel.sh entrypoint.sh runners/*.sh engine/vapt/*.sh engine/code_review/*.sh
+          chmod +x bin/vigil vigil.sh entrypoint.sh runners/*.sh engine/vapt/*.sh engine/code_review/*.sh
           bash -n bin/vigil
-          bash -n bin/sentinel
           bash -n vigil.sh
-          bash -n sentinel.sh
           bash -n entrypoint.sh
           for script in runners/*.sh engine/vapt/*.sh engine/code_review/*.sh; do
             bash -n "$script"

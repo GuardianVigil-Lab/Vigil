@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sentinel BOLA / IDOR Cross-Tenant Matrix Test Harness
+"""Vigil BOLA / IDOR Cross-Tenant Matrix Test Harness
 
 Performs dual-mode Broken Object Level Authorization (BOLA/IDOR) auditing:
 1. Dynamic Matrix Probe:
@@ -63,7 +63,7 @@ def check_server_active(target_url: str) -> bool:
     if not (target_url.startswith("http://") or target_url.startswith("https://")):
         return False
     try:
-        req = urllib.request.Request(target_url, headers={"User-Agent": "Sentinel-BOLA-Probe/2.0"})
+        req = urllib.request.Request(target_url, headers={"User-Agent": "Vigil-BOLA-Probe/2.0"})
         with urllib.request.urlopen(req, timeout=2) as resp:
             return resp.status < 500
     except urllib.error.HTTPError as e:
@@ -79,8 +79,8 @@ def run_dynamic_matrix(target_url: str) -> List[BolaFinding]:
         return findings
     print(f"  [BOLA Dynamic Matrix] Probing cross-tenant authorization boundaries on {target_url}...")
 
-    # Canonical multi-tenant test paths (configurable via SENTINEL_BOLA_PATHS)
-    env_paths = os.environ.get("SENTINEL_BOLA_PATHS")
+    # Canonical multi-tenant test paths (configurable via VIGIL_BOLA_PATHS)
+    env_paths = os.environ.get("VIGIL_BOLA_PATHS")
     if env_paths:
         test_paths = [p.strip() for p in env_paths.split(",") if p.strip()]
     else:
@@ -94,16 +94,16 @@ def run_dynamic_matrix(target_url: str) -> List[BolaFinding]:
             "/api/v1/audit-logs",
         ]
 
-    token_a = os.environ.get("SENTINEL_TENANT_A_TOKEN", "mock_tenant_a_token_xyz")
-    token_b = os.environ.get("SENTINEL_TENANT_B_TOKEN", "mock_tenant_b_token_abc")
-    tenant_a_id = os.environ.get("SENTINEL_TENANT_A_ID", "tenant-a-1111")
-    tenant_b_id = os.environ.get("SENTINEL_TENANT_B_ID", "tenant-b-2222")
+    token_a = os.environ.get("VIGIL_TENANT_A_TOKEN", "mock_tenant_a_token_xyz")
+    token_b = os.environ.get("VIGIL_TENANT_B_TOKEN", "mock_tenant_b_token_abc")
+    tenant_a_id = os.environ.get("VIGIL_TENANT_A_ID", "tenant-a-1111")
+    tenant_b_id = os.environ.get("VIGIL_TENANT_B_ID", "tenant-b-2222")
 
     # 1. Unauthenticated request check across protected paths
     for path in test_paths:
         full_url = f"{target_url.rstrip('/')}{path}"
         try:
-            req = urllib.request.Request(full_url, headers={"User-Agent": "Sentinel-BOLA-Probe/2.0"})
+            req = urllib.request.Request(full_url, headers={"User-Agent": "Vigil-BOLA-Probe/2.0"})
             with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     findings.append(
@@ -122,8 +122,8 @@ def run_dynamic_matrix(target_url: str) -> List[BolaFinding]:
         except Exception:
             pass
 
-    # 2. Cross-Tenant Two-Token Matrix Probes (configurable via SENTINEL_CROSS_TENANT_PATHS)
-    env_cross = os.environ.get("SENTINEL_CROSS_TENANT_PATHS")
+    # 2. Cross-Tenant Two-Token Matrix Probes (configurable via VIGIL_CROSS_TENANT_PATHS)
+    env_cross = os.environ.get("VIGIL_CROSS_TENANT_PATHS")
     if env_cross:
         cross_tenant_paths = [p.strip().replace("{tenant_id}", tenant_b_id) for p in env_cross.split(",") if p.strip()]
     else:
@@ -139,7 +139,7 @@ def run_dynamic_matrix(target_url: str) -> List[BolaFinding]:
         full_url = f"{target_url.rstrip('/')}{path}"
         # Test Tenant A querying Tenant B resource
         headers_a = {
-            "User-Agent": "Sentinel-BOLA-Probe/2.0",
+            "User-Agent": "Vigil-BOLA-Probe/2.0",
             "Authorization": f"Bearer {token_a}",
             "X-Tenant-ID": tenant_b_id,
             "Cookie": f"session={token_a}; auth_token={token_a}",
@@ -169,7 +169,7 @@ def run_dynamic_matrix(target_url: str) -> List[BolaFinding]:
         # Test Tenant B querying Tenant A resource
         url_for_a = full_url.replace(tenant_b_id, tenant_a_id)
         headers_b = {
-            "User-Agent": "Sentinel-BOLA-Probe/2.0",
+            "User-Agent": "Vigil-BOLA-Probe/2.0",
             "Authorization": f"Bearer {token_b}",
             "X-Tenant-ID": tenant_a_id,
             "Cookie": f"session={token_b}; auth_token={token_b}",
