@@ -35,13 +35,14 @@ Vigil solves this via **Host Workspace Path Translation**:
 ## 2. Multi-Stage Build Architecture
 
 - **Stage 1 (Extractor)**:
-  - Fetches pre-compiled static binaries: Hadolint, Zizmor, Gitleaks, TruffleHog, Syft, Grype, Trivy, Ast-Grep, Squawk, Nuclei, Ffuf, Oasdiff, Dockle, Toxiproxy, Reviewdog, Strix, Nikto, testssl.sh, and PHAR archives.
+  - Multi-arch binary extraction supporting both `linux/amd64` and `linux/arm64` via dynamically mapped architecture tags.
+  - Fetches pre-compiled static binaries: Hadolint, Zizmor, Gitleaks, TruffleHog, Syft, Grype, Trivy, Ast-Grep, Squawk (v2.67.0+ with native ARM64 support), Nuclei, Ffuf, Oasdiff, Dockle, Toxiproxy, Reviewdog, Strix (v1.7.0), Nikto, testssl.sh, and PHAR archives.
   - Ensures clean separation of build-time fetch dependencies from the final minimal image.
 - **Stage 2 (Runtime)**:
   - Base: Debian Bookworm Slim with minimal glibc, curl, git, python3-dev, build-essential.
-  - Node.js 26.x + Go 1.27.1 runtime.
+  - Node.js 26.x + Go 1.27.1 multi-arch runtime (packaged with `libatomic1` for ARM64 V8 memory consistency).
   - Playwright Chromium headless engine and fonts (`/ms-playwright`).
-  - Analysis tools: `golangci-lint`, `govulncheck`, `gosec`, `deadcode`, `nilaway`, `go-mutesting`, `ruff`, `vulture`, `schemathesis`, `semgrep`, `oxlint`, `knip`, `jscpd`.
+  - Analysis tools: `golangci-lint`, `govulncheck`, `gosec`, `deadcode`, `nilaway`, `go-mutesting` (actively maintained `avito-tech/go-mutesting` fork with Go 1.27+ and Linux ARM64 support), `ruff`, `vulture`, `schemathesis`, `semgrep`, `oxlint`, `knip`, `jscpd`.
   - Drops root privileges via `gosu` in `entrypoint.sh`.
 
 ---
