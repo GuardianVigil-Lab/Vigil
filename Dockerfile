@@ -49,7 +49,7 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
         GRYPE_ARCH="linux_amd64"; \
         TRIVY_ARCH="Linux-64bit"; \
         SG_ARCH="x86_64-unknown-linux-gnu"; \
-        SQUAWK_ARCH="linux-x86_64"; \
+        SQUAWK_ARCH="linux-x64"; \
         NUCLEI_ARCH="linux_amd64"; \
         FFUF_ARCH="linux_amd64"; \
         OASDIFF_ARCH="linux_amd64"; \
@@ -66,7 +66,7 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
     curl -fsSL https://github.com/anchore/grype/releases/download/v0.88.0/grype_0.88.0_${GRYPE_ARCH}.tar.gz | tar -xz -C /out/bin grype && chmod +x grype && \
     curl -fsSL https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_${TRIVY_ARCH}.tar.gz | tar -xz -C /out/bin trivy && chmod +x trivy && \
     curl -fsSL https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-${SG_ARCH}.zip -o /tmp/sg.zip && unzip -q -o /tmp/sg.zip -d /out/bin && chmod +x /out/bin/ast-grep /out/bin/sg && rm -f /tmp/sg.zip && \
-    curl -fsSL https://github.com/sbdchd/squawk/releases/download/v0.25.0/squawk-${SQUAWK_ARCH} -o squawk && chmod +x squawk && \
+    curl -fsSL https://github.com/sbdchd/squawk/releases/download/v2.67.0/squawk-${SQUAWK_ARCH} -o squawk && chmod +x squawk && \
     curl -fsSL https://github.com/projectdiscovery/nuclei/releases/download/v3.3.8/nuclei_3.3.8_${NUCLEI_ARCH}.zip -o /tmp/nuclei.zip && unzip -q -o /tmp/nuclei.zip nuclei -d /out/bin && chmod +x nuclei && rm -f /tmp/nuclei.zip && \
     curl -fsSL https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_${FFUF_ARCH}.tar.gz | tar -xz -C /out/bin ffuf && chmod +x ffuf && \
     curl -fsSL https://github.com/oasdiff/oasdiff/releases/download/v1.33.0/oasdiff_1.33.0_${OASDIFF_ARCH}.tar.gz | tar -xz -C /out/bin oasdiff && chmod +x oasdiff && \
