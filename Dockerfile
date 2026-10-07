@@ -132,7 +132,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libnet-ssleay-perl \
     libio-socket-ssl-perl \
     fonts-liberation \
-    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 26.x and Go 1.27.1 for target architecture
