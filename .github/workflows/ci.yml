@@ -45,13 +45,20 @@ jobs:
 
       - name: Validate Shell Script Execution Bits & Syntax
         run: |
-          chmod +x bin/vigil vigil.sh entrypoint.sh runners/*.sh engine/vapt/*.sh engine/code_review/*.sh
+          chmod +x install.sh bin/vigil vigil.sh entrypoint.sh runners/*.sh engine/vapt/*.sh engine/code_review/*.sh
+          sh -n install.sh
           bash -n bin/vigil
           bash -n vigil.sh
           bash -n entrypoint.sh
           for script in runners/*.sh engine/vapt/*.sh engine/code_review/*.sh; do
             bash -n "$script"
           done
+
+      - name: Test Universal 1-Command Installer
+        run: |
+          INSTALL_DIR=/tmp/test_ci_bin ./install.sh
+          /tmp/test_ci_bin/vigil --help
+          rm -rf /tmp/test_ci_bin
 
       - name: Validate Configuration Schemas
         run: |
@@ -60,3 +67,9 @@ jobs:
       - name: Test Dockerfile Linting
         run: |
           docker run --rm -i hadolint/hadolint < Dockerfile || true
+
+      - name: Test Building & Executing Core Container Image
+        run: |
+          docker build --target core -t vigil:core -f Dockerfile .
+          docker run --rm vigil:core /tools/vigil/bin/vigil --help
+          docker run --rm -v "${PWD}:/workspace" vigil:core fast || true

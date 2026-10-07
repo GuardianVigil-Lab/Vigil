@@ -43,8 +43,13 @@ if [ "$(id -u)" -eq 0 ]; then
 
   RUNNER="/tools/vigil/vigil.sh"
 
+  DEFAULT_BATTERY="review"
+  if [ "${VIGIL_TIER:-}" = "core" ]; then
+    DEFAULT_BATTERY="fast"
+  fi
+
   if [ "$#" -eq 0 ]; then
-    exec gosu vigiluser "${RUNNER}" review
+    exec gosu vigiluser "${RUNNER}" "${DEFAULT_BATTERY}"
   elif [ "$1" = "fast" ] || [ "$1" = "quality" ] || [ "$1" = "security" ] || [ "$1" = "vapt" ] || [ "$1" = "test" ] || [ "$1" = "e2e" ] || [ "$1" = "review" ] || [ "$1" = "all" ]; then
     exec gosu vigiluser "${RUNNER}" "$@"
   elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
@@ -59,8 +64,13 @@ mkdir -p /workspace/reports 2>/dev/null || true
 
 RUNNER="/tools/vigil/vigil.sh"
 
+DEFAULT_BATTERY="review"
+if [ "${VIGIL_TIER:-}" = "core" ]; then
+  DEFAULT_BATTERY="fast"
+fi
+
 if [ "$#" -eq 0 ]; then
-  exec "${RUNNER}" review
+  exec "${RUNNER}" "${DEFAULT_BATTERY}"
 elif [ "$1" = "fast" ] || [ "$1" = "quality" ] || [ "$1" = "security" ] || [ "$1" = "vapt" ] || [ "$1" = "test" ] || [ "$1" = "e2e" ] || [ "$1" = "review" ] || [ "$1" = "all" ]; then
   exec "${RUNNER}" "$@"
 elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then

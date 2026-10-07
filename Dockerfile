@@ -1,11 +1,15 @@
 # syntax=docker/dockerfile:1
 # Vigil — Unified Enterprise QA, Security, VAPT & Review Engine
-# Multi-stage build on debian:bookworm-slim
+# Multi-stage multi-target build on debian:bookworm-slim
+# Targets:
+#   - core (~150MB): Lean security, fast AST linting, anti-fabrication, secrets
+#   - full (~1.2GB): Complete VAPT, Playwright Chromium, Go/Node/PHP compilers, mutation testing
 
 # ==============================================================================
-# Stage 1: Binary Extractor
+# Stage 1: Core Binary Extractor
+# Pre-compiled static binaries for core battery (AST, secrets, SCA, container lint)
 # ==============================================================================
-FROM debian:bookworm-slim AS extractor
+FROM debian:bookworm-slim AS core-extractor
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -32,14 +36,7 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
         GRYPE_ARCH="linux_arm64"; \
         TRIVY_ARCH="Linux-ARM64"; \
         SG_ARCH="aarch64-unknown-linux-gnu"; \
-        SQUAWK_ARCH="linux-arm64"; \
-        NUCLEI_ARCH="linux_arm64"; \
-        FFUF_ARCH="linux_arm64"; \
-        OASDIFF_ARCH="linux_arm64"; \
-        DOCKLE_ARCH="Linux-ARM64"; \
-        TOXIPROXY_ARCH="linux-arm64"; \
-        STRIX_ARCH="arm64"; \
-        REVIEWDOG_ARCH="Linux_arm64" ;; \
+        SQUAWK_ARCH="linux-arm64" ;; \
       *) \
         HADOLINT_ARCH="x86_64"; \
         ZIZMOR_ARCH="x86_64-unknown-linux-gnu"; \
@@ -49,14 +46,7 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
         GRYPE_ARCH="linux_amd64"; \
         TRIVY_ARCH="Linux-64bit"; \
         SG_ARCH="x86_64-unknown-linux-gnu"; \
-        SQUAWK_ARCH="linux-x64"; \
-        NUCLEI_ARCH="linux_amd64"; \
-        FFUF_ARCH="linux_amd64"; \
-        OASDIFF_ARCH="linux_amd64"; \
-        DOCKLE_ARCH="Linux-64bit"; \
-        TOXIPROXY_ARCH="linux-amd64"; \
-        STRIX_ARCH="x86_64"; \
-        REVIEWDOG_ARCH="Linux_x86_64" ;; \
+        SQUAWK_ARCH="linux-x64" ;; \
     esac && \
     curl -fsSL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-${HADOLINT_ARCH} -o hadolint && chmod +x hadolint && \
     curl -fsSL https://github.com/woodruffw/zizmor/releases/download/v1.30.1/zizmor-${ZIZMOR_ARCH}.tar.gz | tar -xz -C /out/bin zizmor && chmod +x zizmor && \
@@ -66,7 +56,48 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
     curl -fsSL https://github.com/anchore/grype/releases/download/v0.88.0/grype_0.88.0_${GRYPE_ARCH}.tar.gz | tar -xz -C /out/bin grype && chmod +x grype && \
     curl -fsSL https://github.com/aquasecurity/trivy/releases/download/v0.75.0/trivy_0.75.0_${TRIVY_ARCH}.tar.gz | tar -xz -C /out/bin trivy && chmod +x trivy && \
     curl -fsSL https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-${SG_ARCH}.zip -o /tmp/sg.zip && unzip -q -o /tmp/sg.zip -d /out/bin && chmod +x /out/bin/ast-grep /out/bin/sg && rm -f /tmp/sg.zip && \
-    curl -fsSL https://github.com/sbdchd/squawk/releases/download/v2.67.0/squawk-${SQUAWK_ARCH} -o squawk && chmod +x squawk && \
+    curl -fsSL https://github.com/sbdchd/squawk/releases/download/v2.67.0/squawk-${SQUAWK_ARCH} -o squawk && chmod +x squawk
+
+
+# ==============================================================================
+# Stage 2: Full Binary Extractor
+# Pre-compiled static binaries for dynamic VAPT, fuzzing, proxies & PHARs
+# ==============================================================================
+FROM debian:bookworm-slim AS full-extractor
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+ARG TARGETARCH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    unzip \
+    tar \
+    gzip \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /out/bin
+
+RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
+    case "${ARCH}" in \
+      arm64|aarch64) \
+        NUCLEI_ARCH="linux_arm64"; \
+        FFUF_ARCH="linux_arm64"; \
+        OASDIFF_ARCH="linux_arm64"; \
+        DOCKLE_ARCH="Linux-ARM64"; \
+        TOXIPROXY_ARCH="linux-arm64"; \
+        STRIX_ARCH="arm64"; \
+        REVIEWDOG_ARCH="Linux_arm64" ;; \
+      *) \
+        NUCLEI_ARCH="linux_amd64"; \
+        FFUF_ARCH="linux_amd64"; \
+        OASDIFF_ARCH="linux_amd64"; \
+        DOCKLE_ARCH="Linux-64bit"; \
+        TOXIPROXY_ARCH="linux-amd64"; \
+        STRIX_ARCH="x86_64"; \
+        REVIEWDOG_ARCH="Linux_x86_64" ;; \
+    esac && \
     curl -fsSL https://github.com/projectdiscovery/nuclei/releases/download/v3.3.8/nuclei_3.3.8_${NUCLEI_ARCH}.zip -o /tmp/nuclei.zip && unzip -q -o /tmp/nuclei.zip nuclei -d /out/bin && chmod +x nuclei && rm -f /tmp/nuclei.zip && \
     curl -fsSL https://github.com/ffuf/ffuf/releases/download/v2.1.0/ffuf_2.1.0_${FFUF_ARCH}.tar.gz | tar -xz -C /out/bin ffuf && chmod +x ffuf && \
     curl -fsSL https://github.com/oasdiff/oasdiff/releases/download/v1.33.0/oasdiff_1.33.0_${OASDIFF_ARCH}.tar.gz | tar -xz -C /out/bin oasdiff && chmod +x oasdiff && \
@@ -76,15 +107,15 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
     curl -fsSL https://github.com/usestrix/strix/releases/download/v1.7.0/strix-1.7.0-linux-${STRIX_ARCH}.tar.gz | tar -xz -C /tmp && mv /tmp/strix-1.7.0-linux-${STRIX_ARCH} /out/bin/strix && chmod +x /out/bin/strix && \
     curl -fsSL https://github.com/reviewdog/reviewdog/releases/download/v0.20.3/reviewdog_0.20.3_${REVIEWDOG_ARCH}.tar.gz | tar -xz -C /out/bin reviewdog && chmod +x /out/bin/reviewdog
 
-# 17. testssl.sh (v3.0.8)
+# testssl.sh (v3.0.8)
 RUN mkdir -p /out/testssl && \
     curl -fsSL https://github.com/testssl/testssl.sh/archive/refs/tags/v3.0.8.tar.gz | tar -xz --strip-components=1 -C /out/testssl
 
-# 18. nikto (v2.5.0)
+# nikto (v2.5.0)
 RUN mkdir -p /out/nikto && \
     curl -fsSL https://github.com/sullo/nikto/archive/refs/tags/2.5.0.tar.gz | tar -xz --strip-components=1 -C /out/nikto
 
-# 19. PHARs (phpstan, psalm, phpcs)
+# PHARs (phpstan, psalm, phpcs)
 WORKDIR /out/phars
 RUN curl -fsSL https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar -o phpstan.phar && \
     curl -fsSL https://github.com/vimeo/psalm/releases/latest/download/psalm.phar -o psalm.phar && \
@@ -92,7 +123,7 @@ RUN curl -fsSL https://github.com/phpstan/phpstan/releases/latest/download/phpst
 
 
 # ==============================================================================
-# Stage 2: Go Tools Builder (Native cross-compilation via $BUILDPLATFORM)
+# Stage 3: Go Tools Builder (Native cross-compilation via $BUILDPLATFORM)
 # ==============================================================================
 FROM --platform=$BUILDPLATFORM golang:1.27 AS go-builder
 
@@ -118,9 +149,11 @@ RUN go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 && \
 
 
 # ==============================================================================
-# Stage 3: Runtime Environment
+# Stage 4: Core Lean Runtime (target: core, ~150MB)
+# Static binaries + Python 3 + 18 anti-fabrication rules + Diff reviewer + Synthesizer
+# Zero Chromium, Zero Node.js, Zero PHP, Zero Go compiler
 # ==============================================================================
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim AS core
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -129,8 +162,9 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
+ENV VIGIL_TIER=core
 
-# Base runtime packages + Chromium + nmap + perl
+# Minimal core runtime packages: certificates, core utils, git, docker CLI, python3
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -142,10 +176,69 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     unzip \
     tar \
     gzip \
+    bsdextrautils \
     docker.io \
     python3 \
     python3-pip \
     python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy pre-compiled core binaries from core-extractor
+COPY --from=core-extractor /out/bin/* /usr/local/bin/
+RUN ln -sf /usr/local/bin/ast-grep /usr/local/bin/sg 2>/dev/null || true
+
+ENV HOME=/home/vigil
+ENV XDG_CACHE_HOME=/home/vigil/.cache
+ENV PATH="/usr/local/bin:$PATH"
+
+# Create dedicated non-root vigil user and workspace
+RUN groupadd -g 1000 vigilgroup 2>/dev/null || true && \
+    useradd -u 1000 -g 1000 -d /home/vigil -s /bin/bash vigiluser 2>/dev/null || true && \
+    mkdir -p /home/vigil/.cache /workspace /tools/vigil && \
+    chown -R 1000:1000 /home/vigil && \
+    chmod -R 777 /home/vigil && \
+    chmod -R 777 /workspace
+
+# Copy Vigil internals
+COPY . /tools/vigil/
+RUN chmod +x /tools/vigil/vigil.sh \
+             /tools/vigil/entrypoint.sh \
+             /tools/vigil/bin/vigil \
+             /tools/vigil/runners/*.sh \
+             /tools/vigil/engine/vapt/*.sh \
+             /tools/vigil/engine/code_review/*.sh \
+             /tools/vigil/engine/anti_fabrication/*.py \
+             /tools/vigil/engine/vapt/*.py \
+             /tools/vigil/engine/code_review/*.py \
+             /tools/vigil/engine/synthesizer/parse_results.py
+
+WORKDIR /workspace
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD ["/tools/vigil/bin/vigil", "--help"]
+
+USER 1000:1000
+
+ENTRYPOINT ["/tools/vigil/entrypoint.sh"]
+CMD ["fast"]
+
+
+# ==============================================================================
+# Stage 5: Full Runtime (target: full, ~1.2GB)
+# Inherits from core and adds Node.js 26.x, Go 1.27 compiler, PHP 8.2,
+# Playwright Chromium, Strix red-teamer, Nikto, testssl, and mutation engines
+# ==============================================================================
+FROM core AS full
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+USER 0:0
+
+ARG TARGETARCH
+ENV VIGIL_TIER=full
+
+# Additional runtime packages: build tools, PHP 8.2, Nmap, Perl, Chromium
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     build-essential \
     php8.2-cli \
@@ -155,7 +248,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nmap \
     perl \
     chromium \
-    bsdextrautils \
     libnet-ssleay-perl \
     libio-socket-ssl-perl \
     fonts-liberation \
@@ -169,24 +261,26 @@ RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
     esac && \
     curl -fsSL https://nodejs.org/dist/v26.10.0/node-v26.10.0-linux-${NODE_ARCH}.tar.gz | tar -xz --strip-components=1 -C /usr/local && \
     curl -fsSL https://go.dev/dl/go1.27.1.linux-${GO_ARCH}.tar.gz | tar -xz -C /usr/local
+
 ENV PATH="/usr/local/go/bin:/go/bin:/usr/local/bin:$PATH"
 ENV GOPATH="/go"
 
-# Copy pre-compiled binaries, PHARs, testssl, nikto from extractor and go-builder
-COPY --from=extractor /out/bin/* /usr/local/bin/
-COPY --from=go-builder /out/bin/* /usr/local/bin/
+# Copy pre-compiled full binaries, PHARs, testssl, nikto from full-extractor
+COPY --from=full-extractor /out/bin/* /usr/local/bin/
 RUN mkdir -p /usr/local/share/php /usr/local/share/testssl /usr/local/share/nikto
-COPY --from=extractor /out/phars/* /usr/local/share/php/
-COPY --from=extractor /out/testssl /usr/local/share/testssl/
-COPY --from=extractor /out/nikto /usr/local/share/nikto/
+COPY --from=full-extractor /out/phars/* /usr/local/share/php/
+COPY --from=full-extractor /out/testssl /usr/local/share/testssl/
+COPY --from=full-extractor /out/nikto /usr/local/share/nikto/
+
+# Copy Go tools from go-builder
+COPY --from=go-builder /out/bin/* /usr/local/bin/
 
 # Create execution wrappers
 RUN printf '#!/bin/sh\nexec php /usr/local/share/php/phpstan.phar "$@"\n' > /usr/local/bin/phpstan && chmod +x /usr/local/bin/phpstan && \
     printf '#!/bin/sh\nexec php /usr/local/share/php/psalm.phar "$@"\n' > /usr/local/bin/psalm && chmod +x /usr/local/bin/psalm && \
     printf '#!/bin/sh\nexec php /usr/local/share/php/phpcs.phar "$@"\n' > /usr/local/bin/phpcs && chmod +x /usr/local/bin/phpcs && \
     ln -sf /usr/local/share/testssl/testssl.sh /usr/local/bin/testssl.sh && chmod +x /usr/local/bin/testssl.sh && \
-    printf '#!/bin/sh\nexec perl /usr/local/share/nikto/program/nikto.pl "$@"\n' > /usr/local/bin/nikto && chmod +x /usr/local/bin/nikto && \
-    ln -sf /usr/local/bin/ast-grep /usr/local/bin/sg
+    printf '#!/bin/sh\nexec perl /usr/local/share/nikto/program/nikto.pl "$@"\n' > /usr/local/bin/nikto && chmod +x /usr/local/bin/nikto
 
 # Configure Playwright to use system chromium without downloading extra binaries
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
@@ -218,39 +312,16 @@ RUN python3 -m pip install --break-system-packages --no-cache-dir \
     pefile \
     defusedxml
 
-ENV HOME=/home/vigil
-ENV XDG_CACHE_HOME=/home/vigil/.cache
 ENV GOPATH=/home/vigil/go
 ENV GOCACHE=/home/vigil/.cache/go-build
 ENV PATH="/usr/local/go/bin:/home/vigil/go/bin:/go/bin:/usr/local/bin:$PATH"
 
-# Create writable directories and dedicated non-root vigil user
-RUN groupadd -g 1000 vigilgroup 2>/dev/null || true && \
-    useradd -u 1000 -g 1000 -d /home/vigil -s /bin/bash vigiluser 2>/dev/null || true && \
-    mkdir -p /home/vigil/.cache/go-build /home/vigil/go /workspace /tools/vigil /go && \
+RUN mkdir -p /home/vigil/.cache/go-build /home/vigil/go /go && \
     chown -R 1000:1000 /home/vigil && \
     chmod -R 777 /home/vigil && \
-    chmod -R 777 /go && \
-    chmod -R 777 /workspace
-
-# Copy Vigil internals
-COPY . /tools/vigil/
-RUN chmod +x /tools/vigil/vigil.sh \
-             /tools/vigil/entrypoint.sh \
-             /tools/vigil/bin/vigil \
-             /tools/vigil/runners/*.sh \
-             /tools/vigil/engine/vapt/*.sh \
-             /tools/vigil/engine/code_review/*.sh \
-             /tools/vigil/engine/anti_fabrication/*.py \
-             /tools/vigil/engine/vapt/*.py \
-             /tools/vigil/engine/code_review/*.py \
-             /tools/vigil/engine/synthesizer/parse_results.py
+    chmod -R 777 /go
 
 WORKDIR /workspace
-
-# Healthcheck validating Vigil CLI availability
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD ["/tools/vigil/bin/vigil", "--help"]
 
 USER 1000:1000
 

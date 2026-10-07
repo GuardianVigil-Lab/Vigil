@@ -13,18 +13,17 @@ permissions:
   packages: write
 
 jobs:
-  build-and-push:
-    name: Build & Push Container Image
+  build-amd64:
+    name: Build Native AMD64 Images (Core & Full)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # Remove unneeded SDKs to ensure plenty of free runner disk space
       - name: Free runner disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          sudo docker image prune -af >/dev/null
+          sudo docker image prune -af >/dev/null || true
           df -h /
 
       - name: Set up Docker Buildx
@@ -37,33 +36,145 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/guardianvigil-lab/vigil
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
-
-      - name: Build and Push Docker Image
+      - name: Build and Push Core Image (AMD64)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
+          target: core
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ghcr.io/guardianvigil-lab/vigil:core-amd64
+          cache-from: type=gha,scope=core-amd64
+          cache-to: type=gha,mode=max,scope=core-amd64
 
-      # Job logs are not always to hand; an annotation is. Report what the
-      # runner had left so a failure can be told from a full disk.
+      - name: Build and Push Full Image (AMD64)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: full
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/guardianvigil-lab/vigil:full-amd64
+          cache-from: type=gha,scope=full-amd64
+          cache-to: type=gha,mode=max,scope=full-amd64
+
       - name: Report runner state on failure
         if: failure()
         run: |
           echo "::error title=Runner disk after build::$(df -h / | tail -1 | tr -s ' ')"
           echo "::error title=Buildx cache::$(docker buildx du 2>/dev/null | tail -1 | tr -s ' ')"
+
+  build-arm64:
+    name: Build Native ARM64 Images (Core & Full)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af >/dev/null || true
+          df -h /
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Core Image (ARM64)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: core
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/guardianvigil-lab/vigil:core-arm64
+          cache-from: type=gha,scope=core-arm64
+          cache-to: type=gha,mode=max,scope=core-arm64
+
+      - name: Build and Push Full Image (ARM64)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: full
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/guardianvigil-lab/vigil:full-arm64
+          cache-from: type=gha,scope=full-arm64
+          cache-to: type=gha,mode=max,scope=full-arm64
+
+      - name: Report runner state on failure
+        if: failure()
+        run: |
+          echo "::error title=Runner disk after build::$(df -h / | tail -1 | tr -s ' ')"
+          echo "::error title=Buildx cache::$(docker buildx du 2>/dev/null | tail -1 | tr -s ' ')"
+
+  merge-manifests:
+    name: Create & Publish Multi-Arch Manifests
+    runs-on: ubuntu-latest
+    needs: [build-amd64, build-arm64]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          
+          IS_TAG="false"
+          TAG_NAME=""
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            IS_TAG="true"
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "is_tag=${IS_TAG}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Merge & Publish Multi-Arch Core Manifest
+        run: |
+          CORE_TAGS=("-t" "ghcr.io/guardianvigil-lab/vigil:core" "-t" "ghcr.io/guardianvigil-lab/vigil:core-${{ steps.meta.outputs.short_sha }}")
+          if [ "${{ steps.meta.outputs.is_tag }}" = "true" ]; then
+            CORE_TAGS+=("-t" "ghcr.io/guardianvigil-lab/vigil:core-${{ steps.meta.outputs.tag_name }}")
+          fi
+          docker buildx imagetools create "${CORE_TAGS[@]}" \
+            ghcr.io/guardianvigil-lab/vigil:core-amd64 \
+            ghcr.io/guardianvigil-lab/vigil:core-arm64
+
+      - name: Merge & Publish Multi-Arch Full / Latest Manifest
+        run: |
+          FULL_TAGS=("-t" "ghcr.io/guardianvigil-lab/vigil:latest" "-t" "ghcr.io/guardianvigil-lab/vigil:full" "-t" "ghcr.io/guardianvigil-lab/vigil:${{ steps.meta.outputs.short_sha }}")
+          if [ "${{ steps.meta.outputs.is_tag }}" = "true" ]; then
+            FULL_TAGS+=("-t" "ghcr.io/guardianvigil-lab/vigil:${{ steps.meta.outputs.tag_name }}")
+          fi
+          docker buildx imagetools create "${FULL_TAGS[@]}" \
+            ghcr.io/guardianvigil-lab/vigil:full-amd64 \
+            ghcr.io/guardianvigil-lab/vigil:full-arm64
+
+      - name: Verify Published Multi-Arch Manifests
+        run: |
+          echo "Verifying ghcr.io/guardianvigil-lab/vigil:core manifest..."
+          docker buildx imagetools inspect ghcr.io/guardianvigil-lab/vigil:core
+          echo "Verifying ghcr.io/guardianvigil-lab/vigil:latest manifest..."
+          docker buildx imagetools inspect ghcr.io/guardianvigil-lab/vigil:latest

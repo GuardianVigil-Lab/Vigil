@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
 #
 # Vigil: Portable POSIX Host Runner & Security CLI
-# Consumes ghcr.io/guardianvigil-lab/vigil:latest (or local fallback vigil:local)
+# Smart Tier Routing:
+#   - Core (~150MB): fast, quality, security (ghcr.io/guardianvigil-lab/vigil:core)
+#   - Full (~1.2GB): vapt, test, e2e, review (ghcr.io/guardianvigil-lab/vigil:latest)
 #
 # Usage:
-#   vigil [fast | quality | security | vapt | test | e2e | review]
-#   vigil --build    # Rebuild Vigil image locally
-#   vigil --shell    # Drop into debug shell inside container
+#   vigil [fast | quality | security | vapt | test | e2e | review | all]
+#   vigil --standalone [battery]  # Run host-native without Docker
+#   vigil --build [core | full]    # Build container image(s) locally
+#   vigil --shell                  # Interactive debug container shell
+#   vigil --help                   # Show help message
 #
 
 set -euo pipefail
 
-IMAGE_NAME="${VIGIL_IMAGE:-ghcr.io/guardianvigil-lab/vigil:latest}"
-LOCAL_IMAGE="vigil:local"
+CORE_IMAGE="${VIGIL_CORE_IMAGE:-ghcr.io/guardianvigil-lab/vigil:core}"
+FULL_IMAGE="${VIGIL_FULL_IMAGE:-ghcr.io/guardianvigil-lab/vigil:latest}"
+LOCAL_CORE_IMAGE="vigil:core"
+LOCAL_FULL_IMAGE="vigil:local"
+
 VIGIL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET_WORKSPACE="$(pwd)"
 
@@ -26,44 +33,118 @@ Vigil — Enterprise Security, VAPT & Code Review CLI
 
 Usage:
   vigil [fast | quality | security | vapt | test | e2e | review]
-  vigil --build    # Rebuild Vigil container image locally
-  vigil --shell    # Drop into interactive debug shell inside container
-  vigil --help     # Show this help message
+  vigil --standalone [battery]   # Run host-native scripts without Docker
+  vigil --build [core | full]    # Build Vigil container image(s) locally
+  vigil --shell                  # Drop into interactive debug shell inside container
+  vigil --help                   # Show this help message
+
+Smart Container Tiers:
+  Core (~150MB)  Fast AST linting, anti-fabrication (18 rules), secrets, SCA:
+                 Batteries: fast, quality, security
+                 Image:     ghcr.io/guardianvigil-lab/vigil:core (pulls in 5-10s)
+
+  Full (~1.2GB)  Complete dynamic VAPT, Playwright Chromium, Go/Node/PHP compilers:
+                 Batteries: vapt, test, e2e, review, all
+                 Image:     ghcr.io/guardianvigil-lab/vigil:latest
 
 Batteries:
-  fast      Fast developer iteration (< 15s): AST linting, action guards, secrets, workflow security
-  quality   Code quality & dead code: golangci-lint, ruff, knip, squawk, jscpd duplication, PR review
-  security  Deep security: anti-fabrication (18 rules), gitleaks, trufflehog, trivy, grype, IaC
-  vapt      Dynamic VAPT: Strix autonomous AI red team, cross-tenant BOLA matrix, nmap, testssl, nikto
+  fast      Fast developer iteration (< 15s): AST linting, action guards, secrets, workflows
+  quality   Code quality & dead code: golangci-lint, squawk, ruff, knip, jscpd duplication
+  security  Deep security: 18 anti-fabrication rules, gitleaks, trufflehog, trivy, syft, grype
+  vapt      Dynamic VAPT: Strix autonomous AI red team, BOLA cross-tenant matrix, nmap, testssl
   test      QA tests: Go module tests with -race, Vitest, Stryker & go-mutesting mutation testing
   e2e       Containerized Playwright headless Chromium user personas (auth, DOM sweep, form fuzzing)
-  review    Full audit battery (runs all above and synthesizes Markdown + SARIF 2.1.0 reports)
+  review    Full enterprise audit battery (runs all above and synthesizes Markdown + SARIF 2.1.0)
 HELP_EOF
   exit 0
 fi
 
-# Build local image if requested
+# Standalone execution (without Docker)
+STANDALONE=false
+FILTERED_ARGS=()
+for arg in "$@"; do
+  if [ "$arg" = "--standalone" ]; then
+    STANDALONE=true
+  else
+    FILTERED_ARGS+=("$arg")
+  fi
+done
+
+if [ "$STANDALONE" = true ]; then
+  if [ -f "${VIGIL_DIR}/vigil.sh" ]; then
+    exec bash "${VIGIL_DIR}/vigil.sh" "${FILTERED_ARGS[@]}"
+  else
+    echo "Error: Host orchestrator '${VIGIL_DIR}/vigil.sh' not found for --standalone mode." >&2
+    exit 1
+  fi
+fi
+
+# Build local images if requested
 if [ "${1:-}" = "--build" ]; then
-  echo "Building Vigil container image (${LOCAL_IMAGE})..."
-  docker build -t "${LOCAL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+  BUILD_TARGET="${2:-}"
+  case "${BUILD_TARGET}" in
+    core)
+      echo "Building Vigil Core container image (${LOCAL_CORE_IMAGE})..."
+      docker build --target core -t "${LOCAL_CORE_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+      ;;
+    full)
+      echo "Building Vigil Full container image (${LOCAL_FULL_IMAGE})..."
+      docker build --target full -t "${LOCAL_FULL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+      ;;
+    *)
+      echo "Building Vigil Core and Full container images..."
+      docker build --target core -t "${LOCAL_CORE_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+      docker build --target full -t "${LOCAL_FULL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+      ;;
+  esac
   exit 0
 fi
 
-# Check image availability
-SELECTED_IMAGE="${IMAGE_NAME}"
+# Check Docker availability
+if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+  echo "Error: Docker is not installed or the Docker daemon is not running." >&2
+  echo "To run Vigil directly on your host using local tools, use: vigil --standalone [battery]" >&2
+  echo "Or start Docker / Docker Desktop to use containerized batteries." >&2
+  exit 1
+fi
+
+# Determine requested battery and smart tier routing
+REQUESTED_BATTERY=""
+for arg in "$@"; do
+  case "$arg" in
+    fast|quality|security|vapt|test|e2e|review|all)
+      REQUESTED_BATTERY="$arg"
+      break
+      ;;
+  esac
+done
+
+# Route to Core vs Full tier
+if [ -n "${VIGIL_IMAGE:-}" ]; then
+  SELECTED_IMAGE="${VIGIL_IMAGE}"
+  TIER="custom"
+elif [ "$REQUESTED_BATTERY" = "vapt" ] || [ "$REQUESTED_BATTERY" = "test" ] || [ "$REQUESTED_BATTERY" = "e2e" ] || [ "$REQUESTED_BATTERY" = "review" ] || [ "$REQUESTED_BATTERY" = "all" ]; then
+  SELECTED_IMAGE="${FULL_IMAGE}"
+  LOCAL_IMAGE="${LOCAL_FULL_IMAGE}"
+  TIER="full"
+else
+  # Default to lean core image for fast, quality, security, or unspecified
+  SELECTED_IMAGE="${CORE_IMAGE}"
+  LOCAL_IMAGE="${LOCAL_CORE_IMAGE}"
+  TIER="core"
+fi
+
+# Image availability check (never freeze on build unless requested)
 if ! docker image inspect "${SELECTED_IMAGE}" >/dev/null 2>&1; then
-  if docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1; then
-    SELECTED_IMAGE="${LOCAL_IMAGE}"
-  elif [ -f "${VIGIL_DIR}/Dockerfile" ]; then
-    echo "Image '${SELECTED_IMAGE}' not found locally. Building from ${VIGIL_DIR}/Dockerfile..."
-    docker build -t "${LOCAL_IMAGE}" -f "${VIGIL_DIR}/Dockerfile" "${VIGIL_DIR}"
+  if [ -n "${LOCAL_IMAGE:-}" ] && docker image inspect "${LOCAL_IMAGE}" >/dev/null 2>&1; then
     SELECTED_IMAGE="${LOCAL_IMAGE}"
   else
-    echo "Pulling '${SELECTED_IMAGE}'..."
-    docker pull "${SELECTED_IMAGE}" || {
-      echo "Failed to pull ${SELECTED_IMAGE}. Ensure you are authenticated or build locally with 'vigil --build'."
+    echo "Vigil image '${SELECTED_IMAGE}' not found locally. Pulling from registry..."
+    if ! docker pull "${SELECTED_IMAGE}"; then
+      echo "Error: Failed to pull '${SELECTED_IMAGE}'." >&2
+      echo "You can build it locally with: vigil --build ${TIER}" >&2
       exit 1
-    }
+    fi
   fi
 fi
 
@@ -105,7 +186,7 @@ if [ "${1:-}" = "--shell" ]; then
     "${SELECTED_IMAGE}" "${SHELL_ARGS[@]}"
 fi
 
-# Run Vigil
+# Run containerized Vigil
 exec docker run --rm ${DOCKER_FLAGS} \
   --network host \
   --shm-size=2gb \
