@@ -217,7 +217,9 @@ WORKDIR /workspace
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD ["/tools/vigil/bin/vigil", "--help"]
 
-USER 1000:1000
+# Entrypoint drops privileges dynamically to host workspace UID/GID via gosu
+# hadolint ignore=DL3002
+USER 0:0
 
 ENTRYPOINT ["/tools/vigil/entrypoint.sh"]
 CMD ["fast"]
@@ -323,7 +325,9 @@ RUN mkdir -p /home/vigil/.cache/go-build /home/vigil/go /go && \
 
 WORKDIR /workspace
 
-USER 1000:1000
+# Entrypoint drops privileges dynamically to host workspace UID/GID via gosu
+# hadolint ignore=DL3002
+USER 0:0
 
 ENTRYPOINT ["/tools/vigil/entrypoint.sh"]
 CMD ["review"]
