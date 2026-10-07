@@ -188,7 +188,7 @@ RUN GOBIN=/usr/local/bin go install github.com/golangci/golangci-lint/cmd/golang
     GOBIN=/usr/local/bin go install github.com/securego/gosec/v2/cmd/gosec@latest && \
     GOBIN=/usr/local/bin go install golang.org/x/tools/cmd/deadcode@latest && \
     GOBIN=/usr/local/bin go install go.uber.org/nilaway/cmd/nilaway@latest && \
-    GOBIN=/usr/local/bin go install github.com/zimmski/go-mutesting/cmd/go-mutesting@latest && \
+    GOBIN=/usr/local/bin go install github.com/avito-tech/go-mutesting/cmd/go-mutesting@latest && \
     rm -rf /root/.cache/go-build /go/pkg
 
 # Install Python tools
