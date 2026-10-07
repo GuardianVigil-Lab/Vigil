@@ -9,7 +9,7 @@ FROM debian:bookworm-slim AS extractor
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -21,8 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /out/bin
 
-RUN case "${TARGETARCH}" in \
-      arm64) \
+RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
+    case "${ARCH}" in \
+      arm64|aarch64) \
         HADOLINT_ARCH="arm64"; \
         ZIZMOR_ARCH="aarch64-unknown-linux-gnu"; \
         GITLEAKS_ARCH="linux_arm64"; \
@@ -97,7 +98,7 @@ FROM debian:bookworm-slim
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
@@ -132,13 +133,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libnet-ssleay-perl \
     libio-socket-ssl-perl \
     fonts-liberation \
-    libatomic1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js 26.x and Go 1.27.1 for target architecture
-RUN case "${TARGETARCH}" in \
-      arm64) NODE_ARCH="arm64"; GO_ARCH="arm64" ;; \
-      *)     NODE_ARCH="x64";   GO_ARCH="amd64" ;; \
+RUN ARCH="${TARGETARCH:-$(dpkg --print-architecture)}" && \
+    case "${ARCH}" in \
+      arm64|aarch64) NODE_ARCH="arm64"; GO_ARCH="arm64" ;; \
+      *)             NODE_ARCH="x64";   GO_ARCH="amd64" ;; \
     esac && \
     curl -fsSL https://nodejs.org/dist/v26.10.0/node-v26.10.0-linux-${NODE_ARCH}.tar.gz | tar -xz --strip-components=1 -C /usr/local && \
     curl -fsSL https://go.dev/dl/go1.27.1.linux-${GO_ARCH}.tar.gz | tar -xz -C /usr/local
