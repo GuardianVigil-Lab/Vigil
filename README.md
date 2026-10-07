@@ -48,47 +48,51 @@ It consolidates what typically requires dozens of disconnected CI tools into a s
 
 ---
 
-## 2. Quickstart by Operating System
+## 2. Universal 1-Command Installation
 
-Vigil runs on **Linux**, **macOS**, and **Windows** with zero local dependencies beyond Docker:
+Install the `vigil` CLI in seconds on **Linux**, **macOS** (Apple Silicon M-series & Intel), or **Windows WSL2**:
 
-### Linux
 ```bash
-# Clone the repository
-git clone https://github.com/GuardianVigil-Lab/vigil.git
-cd vigil
+curl -fsSL https://raw.githubusercontent.com/GuardianVigil-Lab/Vigil/main/install.sh | sh
+```
 
-# Run fast developer check (< 15 seconds)
-./bin/vigil fast
+The installer verifies your platform, adds `vigil` to your `$PATH`, and pre-pulls the ultra-lean **Core** image (`ghcr.io/guardianvigil-lab/vigil:core`, ~150MB) with cold-start times of 5–10 seconds.
 
-# Run full audit battery (all 6 pillars)
-./bin/vigil review
+### Quickstart by Operating System
+
+Navigate to any repository and run:
+
+```bash
+# ⚡ Fast developer iteration (< 15 seconds)
+vigil fast
+
+# 🛡️ Deep anti-fabrication (18 rules) & secrets audit
+vigil security
+
+# 🔍 Full enterprise review (all 6 pillars & SARIF report)
+vigil review
+
+# 💻 Running without Docker (host-native execution)
+vigil --standalone fast
 ```
 
 ### macOS (Apple Silicon & Intel)
-Vigil publishes native multi-arch images (`linux/arm64` and `linux/amd64`), running natively without emulation on M1/M2/M3/M4 Macs:
+Vigil publishes native multi-arch images (`linux/arm64` and `linux/amd64`) built natively on dedicated ARM64 runners with **Zero QEMU emulation overhead**:
 ```bash
-git clone https://github.com/GuardianVigil-Lab/vigil.git
-cd vigil
-
 # Execute via portable runner
-./bin/vigil fast
+vigil fast
 
 # Targeting local server running on your Mac host
-TARGET_URL=http://host.docker.internal:3000 ./bin/vigil vapt
+TARGET_URL=http://host.docker.internal:3000 vigil vapt
 ```
 
 ### Windows (WSL2 or Native PowerShell)
-- **Option A (WSL2 - Recommended)**: Open Ubuntu terminal and run `./bin/vigil review`.
+- **Option A (WSL2 - Recommended)**: Run `curl -fsSL https://raw.githubusercontent.com/GuardianVigil-Lab/Vigil/main/install.sh | sh` inside your WSL2 Ubuntu terminal and run `vigil review`.
 - **Option B (Native PowerShell)**: Use Vigil's native PowerShell runner:
   ```powershell
   git clone https://github.com/GuardianVigil-Lab/vigil.git
   cd vigil
-
-  # Run fast developer check
   .\bin\vigil.ps1 fast
-
-  # Run full review
   .\bin\vigil.ps1 review
   ```
 

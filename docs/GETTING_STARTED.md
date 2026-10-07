@@ -31,7 +31,20 @@ You do **not** need to install Go, Node, Python, PHP, Chromium, or security scan
 
 ## 3. Installation Options
 
-### Option A: Portable CLI Runner (`bin/vigil`)
+### Option A: Universal 1-Command Installer (Recommended)
+Install Vigil in seconds across Linux, macOS (Apple Silicon & Intel), or Windows WSL2:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GuardianVigil-Lab/Vigil/main/install.sh | sh
+```
+
+The installer will:
+1. Detect your OS and architecture (`linux/amd64`, `linux/arm64`, macOS Darwin arm64/x86_64, or WSL2).
+2. Install the `vigil` CLI into your PATH (`/usr/local/bin` or `~/.local/bin`).
+3. Check Docker status and pre-pull the ultra-lean **Core** image (`ghcr.io/guardianvigil-lab/vigil:core`).
+4. Validate execution and output quickstart instructions.
+
+### Option B: Portable CLI Runner (`bin/vigil`)
 You can download the single portable host runner script directly into your local `$PATH`:
 
 ```bash
@@ -45,7 +58,7 @@ Verify your installation:
 vigil --help
 ```
 
-### Option B: Native Windows PowerShell Runner (`bin/vigil.ps1`)
+### Option C: Native Windows PowerShell Runner (`bin/vigil.ps1`)
 On Windows workstations using native PowerShell:
 ```powershell
 # Clone the repository
@@ -56,9 +69,17 @@ cd vigil
 .\bin\vigil.ps1 -Help
 ```
 
-### Option C: Direct Docker Run
+### Option D: Direct Docker Run
 You can run Vigil against any project without cloning or installing anything:
 ```bash
+# Lean Core Tier (<150MB): fast developer iteration & security
+docker run --rm \
+  --network host \
+  -u "$(id -u):$(id -g)" \
+  -v "$(pwd):/workspace" \
+  ghcr.io/guardianvigil-lab/vigil:core fast
+
+# Full Tier (~1.2GB): deep VAPT, Playwright E2E & complete review
 docker run --rm \
   --network host \
   --shm-size=2gb \
@@ -68,6 +89,28 @@ docker run --rm \
   -v "$(pwd):/workspace" \
   ghcr.io/guardianvigil-lab/vigil:latest review
 ```
+
+### Option E: Standalone Mode (No Docker Required)
+If Docker is unavailable on your host, Vigil can run directly using host-native scripts and local tools:
+```bash
+vigil --standalone fast
+```
+
+---
+
+## 3.1 Container Tiers & Smart Routing
+
+Vigil provides an intelligent dual-tier container architecture:
+
+| Tier | Size | Cold-Start Pull | Batteries Supported | Included Tools |
+| :--- | :--- | :--- | :--- | :--- |
+| **Core** (`vigil:core`) | ~150 MB | 5–10s | `fast`, `quality`, `security` | Pre-compiled static binaries (`ast-grep`, `gitleaks`, `trufflehog`, `zizmor`, `squawk`, `hadolint`, `trivy`, `syft`, `grype`), Python 3 with the 18 anti-fabrication rules, diff reviewer, and SARIF synthesizer. Zero Chromium, zero Node.js, zero PHP, zero Go runtime. |
+| **Full** (`vigil:latest`) | ~1.2 GB | 30–60s | `vapt`, `test`, `e2e`, `review`, `all` | All Core tools plus Node.js 26.x, Go 1.27 compiler, PHP 8.2, Playwright headless Chromium, Strix autonomous AI red team, Nikto, testssl.sh, PHPStan, Stryker, and mutation engines. |
+
+The `vigil` CLI automatically routes commands to the appropriate tier:
+- Running `vigil fast`, `vigil quality`, or `vigil security` invokes `vigil:core`.
+- Running `vigil vapt`, `vigil e2e`, or `vigil review` invokes `vigil:latest`.
+- If an image is not present locally, Vigil pulls it from GHCR without freezing on slow local builds.
 
 ---
 
