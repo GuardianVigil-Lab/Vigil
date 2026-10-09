@@ -45,7 +45,7 @@ if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "help" ]; then
 Vigil — Enterprise Security, VAPT & Code Review CLI
 
 Usage:
-  vigil [fast | quality | security | vapt | test | e2e | review]
+  vigil [fast | quality | security | vapt | test | e2e | review | full]
   vigil --standalone [battery]   # Run host-native scripts without Docker
   vigil --build [core | full]    # Build Vigil container image(s) locally
   vigil --shell                  # Drop into interactive debug shell inside container
@@ -57,7 +57,7 @@ Smart Container Tiers:
                  Image:     ghcr.io/guardianvigil-lab/vigil:core (pulls in 5-10s)
 
   Full (~1.2GB)  Complete dynamic VAPT, Playwright Chromium, Go/Node/PHP compilers:
-                 Batteries: vapt, test, e2e, review, all
+                 Batteries: vapt, test, e2e, review, full, all
                  Image:     ghcr.io/guardianvigil-lab/vigil:latest
 
 Batteries:
@@ -68,6 +68,7 @@ Batteries:
   test      QA tests: Go module tests with -race, Vitest, Stryker & go-mutesting mutation testing
   e2e       Containerized Playwright headless Chromium user personas (auth, DOM sweep, form fuzzing)
   review    Full enterprise audit battery (runs all above and synthesizes Markdown + SARIF 2.1.0)
+  full      Complete all-in-one execution of all security, QA, VAPT, and review batteries
 HELP_EOF
   exit 0
 fi

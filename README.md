@@ -113,6 +113,7 @@ Vigil structures audits into targeted, timed batteries:
 | `test` | `~1m` | Vitest, Go unit tests (`-race`), Stryker & go-mutesting mutation testing | Broken functionality & test efficacy |
 | `e2e` | `~45s` | Playwright Chromium headless user personas (auth, DOM sweep, form boundary fuzzing) | End-to-end user persona testing |
 | `review` | `~3m` | Full execution of all batteries above + SARIF 2.1.0 and Markdown synthesis | Complete pre-release sign-off |
+| `full` | `~3m` | All-in-one execution of all 6 batteries (AST, SAST, QA tests, VAPT, SARIF) | Comprehensive single-command gate |
 
 ---
 
@@ -136,6 +137,7 @@ Vigil includes a native MCP server for AI coding assistants (Claude Code, Cursor
 ```
 
 ### Exposed MCP Tools:
+- `vigil_full_scan(workspace_path, target_url, base_branch, skip_vapt, skip_qa)`: Complete all-in-one execution of all security, QA, VAPT, and review batteries in a single call.
 - `vigil_fast_scan(workspace_path, fix_mode)`: Rapid AST invariant & syntax scan (<15s).
 - `vigil_security_audit(workspace_path, severity_threshold)`: Anti-fabrication & secret detection.
 - `vigil_vapt(target_url, workspace_path, test_matrix)`: BOLA matrix & penetration testing.
@@ -177,8 +179,8 @@ curl -s -X POST http://127.0.0.1:8080/api/v1/scan \
 | `VIGIL_DEFAULT_WORKSPACE` | `.` | Workspace a webhook scans, relative to the root. |
 | `VIGIL_API_MAX_SCANS` | `2` | Concurrent scans; more answer `429`. |
 
-Batteries are limited to `fast`, `quality`, `security`, `vapt`, `test`, `e2e`
-and `review`; requests must be `application/json` and at most 1 MiB. The API
+Batteries are limited to `fast`, `quality`, `security`, `vapt`, `test`, `e2e`,
+`review` and `full`; requests must be `application/json` and at most 1 MiB. The API
 sends no CORS headers, so a web page cannot drive it from a browser.
 
 ---

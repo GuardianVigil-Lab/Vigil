@@ -7,7 +7,7 @@ branding:
 
 inputs:
   battery:
-    description: 'Audit battery mode: fast, quality, security, vapt, test, e2e, review'
+    description: 'Audit battery mode: fast, quality, security, vapt, test, e2e, review, full'
     required: false
     default: 'review'
   target_url:

@@ -2,6 +2,7 @@
 """
 Vigil Model Context Protocol (MCP) Server
 Exposes Vigil security, VAPT, code review, and quality engines as native MCP tools:
+  - vigil_full_scan
   - vigil_fast_scan
   - vigil_security_audit
   - vigil_vapt
@@ -315,6 +316,148 @@ def vigil_review(workspace_path: str = ".", base_branch: str = "main", post_comm
     return results
 
 
+def vigil_full_scan(
+    workspace_path: str = ".",
+    target_url: str = "http://127.0.0.1:3000",
+    base_branch: str = "main",
+    skip_vapt: bool = False,
+    skip_qa: bool = False,
+) -> Dict[str, Any]:
+    """
+    Execute complete all-in-one Vigil scan across all security and quality dimensions:
+    1. Fast AST & Structural Invariant Scan (ast-grep, syntax, action guards)
+    2. Deep Security & Anti-Fabrication Audit (18-rule anti-fabrication, secrets/Gitleaks)
+    3. QA Invariants & Test Suite Execution (Vitest, Go race tests, check-migrations)
+    4. Dynamic VAPT Probes (BOLA/IDOR two-token matrix, security headers)
+    5. Code Review & Report Synthesis (Markdown + SARIF 2.1.0 generation)
+    """
+    ws = Path(workspace_path).resolve()
+    if not ws.exists():
+        return {"status": "error", "error": f"Workspace does not exist: {workspace_path}"}
+
+    results: Dict[str, Any] = {
+        "tool": "vigil_full_scan",
+        "workspace": str(ws),
+        "verdict": "PASSED",
+        "blockers": 0,
+        "advisories": 0,
+        "batteries": {},
+        "findings": [],
+        "sarif_report": None,
+        "markdown_report": None,
+        "summary": "",
+    }
+
+    # 1. Fast AST Invariant Scan
+    fast_res = vigil_fast_scan(workspace_path=str(ws))
+    results["batteries"]["fast_scan"] = {
+        "passed": fast_res.get("passed", True),
+        "findings_count": len(fast_res.get("findings", [])),
+    }
+    for f in fast_res.get("findings", []):
+        results["findings"].append(f)
+        if f.get("severity") in ("P0", "P1"):
+            results["blockers"] += 1
+        else:
+            results["advisories"] += 1
+
+    # 2. Deep Security & Anti-Fabrication Audit
+    sec_res = vigil_security_audit(workspace_path=str(ws), severity_threshold="low")
+    results["batteries"]["security_audit"] = {
+        "verdict": sec_res.get("verdict", "PASSED"),
+        "blockers": sec_res.get("blockers", 0),
+        "advisories": sec_res.get("advisories", 0),
+    }
+    for f in sec_res.get("findings", []):
+        results["findings"].append(f)
+        if f.get("severity") in ("P0", "P1"):
+            results["blockers"] += 1
+        else:
+            results["advisories"] += 1
+
+    # 3. QA Invariants & Test Suite Execution
+    if not skip_qa:
+        qa_script = VIGIL_ROOT / "runners" / "run_qa_tests.sh"
+        qa_passed = True
+        qa_failures: List[str] = []
+        if qa_script.exists():
+            code, out, err = _run_command(
+                ["bash", str(qa_script)],
+                cwd=ws,
+                timeout=180,
+                env={"WORKSPACE": str(ws), "TOOL_ROOT": str(VIGIL_ROOT)},
+            )
+            raw_dir = ws / "reports" / "raw"
+            fail_files = list(raw_dir.glob("*.fail")) if raw_dir.exists() else []
+            if fail_files or code != 0:
+                qa_passed = False
+                for ff in fail_files:
+                    fail_desc = ff.read_text(encoding="utf-8").strip() or ff.stem
+                    qa_failures.append(fail_desc)
+                    results["findings"].append({
+                        "rule": "qa-test-failure",
+                        "severity": "P0",
+                        "file": str(ff.relative_to(ws) if str(ff).startswith(str(ws)) else ff.name),
+                        "line": 1,
+                        "message": f"Test failure detected: {fail_desc}",
+                    })
+                    results["blockers"] += 1
+        results["batteries"]["qa_tests"] = {
+            "passed": qa_passed,
+            "failures": qa_failures,
+        }
+    else:
+        results["batteries"]["qa_tests"] = {"skipped": True}
+
+    # 4. Dynamic VAPT Probes
+    if not skip_vapt:
+        vapt_res = vigil_vapt(target_url=target_url, workspace_path=str(ws))
+        results["batteries"]["vapt"] = {
+            "verdict": vapt_res.get("verdict", "SECURE"),
+            "vulnerabilities_count": len(vapt_res.get("vulnerabilities", [])),
+        }
+        for v in vapt_res.get("vulnerabilities", []):
+            results["findings"].append({
+                "rule": v.get("type", "VAPT Finding"),
+                "severity": v.get("severity", "P2"),
+                "file": "target_url",
+                "line": 1,
+                "message": v.get("details", ""),
+            })
+            if v.get("severity") in ("P0", "P1"):
+                results["blockers"] += 1
+            else:
+                results["advisories"] += 1
+    else:
+        results["batteries"]["vapt"] = {"skipped": True}
+
+    # 5. Review & Synthesis
+    review_res = vigil_review(workspace_path=str(ws), base_branch=base_branch)
+    results["batteries"]["review"] = {
+        "synthesizer_exit_code": review_res.get("synthesizer_exit_code", 0),
+    }
+    results["sarif_report"] = review_res.get("sarif_report")
+    results["markdown_report"] = review_res.get("markdown_report")
+    results["markdown_content"] = review_res.get("markdown_content")
+
+    # Verdict Calculation
+    if results["blockers"] > 0:
+        results["verdict"] = "FAILED"
+    elif results["advisories"] > 0:
+        results["verdict"] = "PASSED_WITH_WARNINGS"
+    else:
+        results["verdict"] = "PASSED"
+
+    results["summary"] = (
+        f"Vigil Full Scan: {results['verdict']} | "
+        f"Blockers (P0/P1): {results['blockers']} | "
+        f"Advisories (P2/P3): {results['advisories']} | "
+        f"Total Findings: {len(results['findings'])}"
+    )
+
+    return results
+
+
 def vigil_fix(workspace_path: str = ".", issue_ids: Optional[List[str]] = None, dry_run: bool = True) -> Dict[str, Any]:
     """
     Apply automated remediation recommendations:
@@ -377,6 +520,40 @@ def vigil_fix(workspace_path: str = ".", issue_ids: Optional[List[str]] = None, 
 
 # Tool definitions for MCP catalog
 MCP_TOOLS = [
+    {
+        "name": "vigil_full_scan",
+        "description": "Execute complete all-in-one Vigil scan (AST invariants, anti-fabrication, secrets, QA tests, dynamic VAPT, and review report synthesis) in a single run.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "workspace_path": {
+                    "type": "string",
+                    "description": "Path to workspace repository",
+                    "default": ".",
+                },
+                "target_url": {
+                    "type": "string",
+                    "description": "Target HTTP/HTTPS URL for dynamic VAPT probes",
+                    "default": "http://127.0.0.1:3000",
+                },
+                "base_branch": {
+                    "type": "string",
+                    "description": "Base Git branch to compare against for review diffs",
+                    "default": "main",
+                },
+                "skip_vapt": {
+                    "type": "boolean",
+                    "description": "Skip dynamic VAPT penetration testing probes",
+                    "default": False,
+                },
+                "skip_qa": {
+                    "type": "boolean",
+                    "description": "Skip running unit and race test suites",
+                    "default": False,
+                },
+            },
+        },
+    },
     {
         "name": "vigil_fast_scan",
         "description": "Execute Vigil FAST battery (<15s) for rapid AST linting, structural invariant guards, and syntax checks.",
@@ -493,7 +670,15 @@ MCP_TOOLS = [
 
 def handle_tool_call(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
     """Dispatch tool call to appropriate Vigil engine function."""
-    if name == "vigil_fast_scan":
+    if name == "vigil_full_scan":
+        return vigil_full_scan(
+            workspace_path=args.get("workspace_path", "."),
+            target_url=args.get("target_url", "http://127.0.0.1:3000"),
+            base_branch=args.get("base_branch", "main"),
+            skip_vapt=args.get("skip_vapt", False),
+            skip_qa=args.get("skip_qa", False),
+        )
+    elif name == "vigil_fast_scan":
         return vigil_fast_scan(
             workspace_path=args.get("workspace_path", "."),
             fix_mode=args.get("fix_mode", False),

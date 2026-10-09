@@ -85,7 +85,7 @@ To completely eliminate slow CPU emulation bottlenecks, Vigil leverages GitHub A
 
 The `vigil` CLI automatically routes tasks without user intervention:
 - **Fast / Quality / Security**: Dispatches to `ghcr.io/guardianvigil-lab/vigil:core` for instant feedback.
-- **VAPT / Test / E2E / Review**: Routes to `ghcr.io/guardianvigil-lab/vigil:latest` / `:full`.
+- **VAPT / Test / E2E / Review / Full**: Routes to `ghcr.io/guardianvigil-lab/vigil:latest` / `:full`.
 - **Standalone Fallback**: When invoked with `--standalone` (or if Docker is absent), executes directly on the host using local scripts.
 - **Non-Freezing Fallback**: Checks remote registries before considering local builds; never triggers unrequested local image compilation.
 

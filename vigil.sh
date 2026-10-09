@@ -56,8 +56,8 @@ case "${MODE}" in
     echo "🎭 Running Playwright E2E User Persona battery..."
     bash "${TOOL_ROOT}/runners/run_e2e_user.sh"
     ;;
-  review|all)
-    echo "🔍 Running COMPLETE REVIEW battery..."
+  review|all|full)
+    echo "🔍 Running COMPLETE FULL REVIEW battery..."
     bash "${TOOL_ROOT}/runners/run_ast_lint.sh" review || true
     bash "${TOOL_ROOT}/runners/run_junk_detect.sh" || true
     bash "${TOOL_ROOT}/runners/run_quality.sh" || true
@@ -68,7 +68,7 @@ case "${MODE}" in
     ;;
   *)
     echo "Unknown mode: ${MODE}"
-    echo "Supported modes: fast, quality, security, vapt, test, e2e, review"
+    echo "Supported modes: fast, quality, security, vapt, test, e2e, review, full"
     exit 2
     ;;
 esac

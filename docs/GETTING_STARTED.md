@@ -105,11 +105,11 @@ Vigil provides an intelligent dual-tier container architecture:
 | Tier | Size | Cold-Start Pull | Batteries Supported | Included Tools |
 | :--- | :--- | :--- | :--- | :--- |
 | **Core** (`vigil:core`) | ~150 MB | 5–10s | `fast`, `quality`, `security` | Pre-compiled static binaries (`ast-grep`, `gitleaks`, `trufflehog`, `zizmor`, `squawk`, `hadolint`, `trivy`, `syft`, `grype`), Python 3 with the 18 anti-fabrication rules, diff reviewer, and SARIF synthesizer. Zero Chromium, zero Node.js, zero PHP, zero Go runtime. |
-| **Full** (`vigil:latest`) | ~1.2 GB | 30–60s | `vapt`, `test`, `e2e`, `review`, `all` | All Core tools plus Node.js 26.x, Go 1.27 compiler, PHP 8.2, Playwright headless Chromium, Strix autonomous AI red team, Nikto, testssl.sh, PHPStan, Stryker, and mutation engines. |
+| **Full** (`vigil:latest`) | ~1.2 GB | 30–60s | `vapt`, `test`, `e2e`, `review`, `full`, `all` | All Core tools plus Node.js 26.x, Go 1.27 compiler, PHP 8.2, Playwright headless Chromium, Strix autonomous AI red team, Nikto, testssl.sh, PHPStan, Stryker, and mutation engines. |
 
 The `vigil` CLI automatically routes commands to the appropriate tier:
 - Running `vigil fast`, `vigil quality`, or `vigil security` invokes `vigil:core`.
-- Running `vigil vapt`, `vigil e2e`, or `vigil review` invokes `vigil:latest`.
+- Running `vigil vapt`, `vigil e2e`, `vigil review`, or `vigil full` invokes `vigil:latest`.
 - If an image is not present locally, Vigil pulls it from GHCR without freezing on slow local builds.
 
 ---
@@ -165,6 +165,13 @@ Runs all batteries sequentially, synthesizes results, and produces executive rep
 ```bash
 vigil review
 ```
+
+### 7. Complete All-in-One Full Scan (`full`)
+Executes all batteries (fast AST invariants, deep security/anti-fabrication, QA test runner, dynamic VAPT, and review report synthesis) in a single consolidated pass:
+```bash
+vigil full
+```
+*Checks: Full end-to-end audit with automated SARIF generation in a single command.*
 
 ---
 

@@ -32,7 +32,7 @@ VIGIL_ROOT = Path(__file__).resolve().parent.parent.parent
 SCANS: Dict[str, Dict[str, Any]] = {}
 SCANS_LOCK = threading.Lock()
 
-BATTERIES = ("fast", "quality", "security", "vapt", "test", "e2e", "review")
+BATTERIES = ("fast", "quality", "security", "vapt", "test", "e2e", "review", "full")
 MAX_BODY_BYTES = 1 << 20
 
 # Set by run_server; module-level so the handler and the tests share them.
