@@ -8,7 +8,7 @@
     <a href="https://github.com/GuardianVigil-Lab/vigil/pkgs/container/vigil"><img src="https://img.shields.io/badge/ghcr.io-guardianvigil--lab%2Fvigil-blue?logo=docker" alt="Docker Image" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-green.svg" alt="License: Apache 2.0" /></a>
     <a href="docs/CROSS_PLATFORM.md"><img src="https://img.shields.io/badge/Platforms-Linux%20%7C%20macOS%20%7C%20Windows-blueviolet" alt="Platforms" /></a>
-    [![M8ven Score](https://m8ven.ai/badge/mcp/guardianvigil-lab-vigil-1wi6jk?v=deb10bcb6110d01449bc5a5be9a5b496)]
+    <a href="https://m8ven.ai/mcp/guardianvigil-lab/vigil?s=readme"><img src="https://m8ven.ai/badge/mcp/guardianvigil-lab/vigil" alt="M8ven Score" /></a>
   </p>
 </div>
 
